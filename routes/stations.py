@@ -7,6 +7,7 @@ from extensions import db
 from models import ChargingStation
 from utils.station_validation import VALID_CHARGING_TYPES, validate_station_payload
 from utils.csrf import validate_csrf_token
+from utils.decorators import admin_required
 
 stations_bp = Blueprint("stations", __name__, url_prefix="/stations")
 
@@ -38,13 +39,13 @@ def station_map():
 
 
 @stations_bp.get("/new")
-@login_required
+@admin_required
 def new_station():
     return render_template("stations/form.html", station=None, charging_types=VALID_CHARGING_TYPES, form=None)
 
 
 @stations_bp.post("")
-@login_required
+@admin_required
 def create_station():
     if not validate_csrf_token(request.form.get("csrf_token")):
         flash("Your session has expired. Please try again.", "danger")
@@ -81,14 +82,14 @@ def create_station():
 
 
 @stations_bp.get("/<int:station_id>/edit")
-@login_required
+@admin_required
 def edit_station(station_id: int):
     station = ChargingStation.query.get_or_404(station_id)
     return render_template("stations/form.html", station=station, charging_types=VALID_CHARGING_TYPES, form=None)
 
 
 @stations_bp.post("/<int:station_id>/update")
-@login_required
+@admin_required
 def update_station(station_id: int):
     station = ChargingStation.query.get_or_404(station_id)
     if not validate_csrf_token(request.form.get("csrf_token")):
@@ -122,7 +123,7 @@ def update_station(station_id: int):
 
 
 @stations_bp.post("/<int:station_id>/delete")
-@login_required
+@admin_required
 def delete_station(station_id: int):
     station = ChargingStation.query.get_or_404(station_id)
     if not validate_csrf_token(request.form.get("csrf_token")):

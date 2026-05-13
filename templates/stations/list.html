@@ -10,7 +10,9 @@
   </div>
   <div class="d-flex gap-2">
     <a href="{{ url_for('stations.station_map') }}" class="btn btn-outline-secondary">Map View</a>
-    <a href="{{ url_for('stations.new_station') }}" class="btn btn-dark">Add Station</a>
+    {% if current_user.is_authenticated and current_user.is_admin() %}
+      <a href="{{ url_for('stations.new_station') }}" class="btn btn-dark">Add Station</a>
+    {% endif %}
   </div>
 </div>
 
@@ -41,11 +43,13 @@
                   {% if current_user.is_authenticated %}
                     <a href="{{ url_for('bookings.new_booking', station_id=station.id) }}" class="btn btn-sm btn-dark {% if station.available_slots <= 0 %}disabled{% endif %}">Book</a>
                   {% endif %}
-                  <a href="{{ url_for('stations.edit_station', station_id=station.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
-                  <form method="post" action="{{ url_for('stations.delete_station', station_id=station.id) }}" class="mb-0" onsubmit="return confirm('Delete this station?');">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
-                  </form>
+                  {% if current_user.is_authenticated and current_user.is_admin() %}
+                    <a href="{{ url_for('stations.edit_station', station_id=station.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                    <form method="post" action="{{ url_for('stations.delete_station', station_id=station.id) }}" class="mb-0" onsubmit="return confirm('Delete this station?');">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                    </form>
+                  {% endif %}
                 </div>
               </td>
             </tr>

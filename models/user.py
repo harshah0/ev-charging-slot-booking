@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from enum import Enum
 
 from flask_login import UserMixin
 from sqlalchemy import func, text
@@ -10,6 +11,12 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from extensions import db, login_manager
 
 
+class UserRole(str, Enum):
+    """User role enumeration for role-based access control."""
+    ADMIN = "admin"
+    USER = "user"
+
+
 class User(UserMixin, db.Model):
     __tablename__ = "users"
 
@@ -17,6 +24,13 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), nullable=False, unique=True, index=True)
     email = db.Column(db.String(255), nullable=False, unique=True, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
+    role = db.Column(
+        db.String(20),
+        nullable=False,
+        default=UserRole.USER.value,
+        server_default=UserRole.USER.value,
+        index=True,
+    )
     wallet_balance = db.Column(
         db.Numeric(10, 2),
         nullable=False,
@@ -42,6 +56,14 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password: str) -> bool:
         return check_password_hash(self.password_hash, password)
+
+    def is_admin(self) -> bool:
+        """Check if user has admin role."""
+        return self.role == UserRole.ADMIN.value
+
+    def is_user(self) -> bool:
+        """Check if user has user role."""
+        return self.role == UserRole.USER.value
 
     @validates("username")
     def validate_username(self, key: str, value: str) -> str:
@@ -70,7 +92,7 @@ class User(UserMixin, db.Model):
         return value
 
     def __repr__(self) -> str:
-        return f"User(id={self.id!r}, username={self.username!r}, email={self.email!r})"
+        return f"User(id={self.id!r}, username={self.username!r}, email={self.email!r}, role={self.role!r})"
 
 
 @login_manager.user_loader
