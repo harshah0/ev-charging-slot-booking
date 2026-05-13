@@ -11,10 +11,30 @@ from utils.csrf import validate_csrf_token
 stations_bp = Blueprint("stations", __name__, url_prefix="/stations")
 
 
+def _serialize_station_for_map(station: ChargingStation) -> dict:
+    return {
+        "id": station.id,
+        "station_name": station.station_name,
+        "location": f"{station.address}, {station.city}, {station.state}",
+        "charging_type": station.charging_type,
+        "available_slots": station.available_slots,
+        "total_slots": station.total_slots,
+        "latitude": float(station.latitude),
+        "longitude": float(station.longitude),
+    }
+
+
 @stations_bp.get("")
 def list_stations():
     stations = ChargingStation.query.order_by(ChargingStation.created_at.desc()).all()
     return render_template("stations/list.html", stations=stations)
+
+
+@stations_bp.get("/map")
+def station_map():
+    stations = ChargingStation.query.order_by(ChargingStation.station_name.asc()).all()
+    station_points = [_serialize_station_for_map(station) for station in stations]
+    return render_template("stations/map.html", stations=station_points)
 
 
 @stations_bp.get("/new")
