@@ -10,10 +10,31 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
       <div class="container">
         <span class="navbar-brand fw-semibold">Smart EV Charging Slot Booking System</span>
+        <div class="d-flex gap-2">
+          {% if current_user.is_authenticated %}
+            <form method="post" action="{{ url_for('auth.logout') }}" class="mb-0">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-outline-light btn-sm">Logout</button>
+            </form>
+          {% else %}
+            <a href="{{ url_for('auth.login') }}" class="btn btn-outline-light btn-sm">Login</a>
+            <a href="{{ url_for('auth.register') }}" class="btn btn-light btn-sm">Register</a>
+          {% endif %}
+        </div>
       </div>
     </nav>
 
     <main class="container py-5">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="mb-4">
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }} mb-2" role="alert">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
       {% block content %}{% endblock %}
     </main>
   </body>
