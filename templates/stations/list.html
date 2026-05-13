@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Charging Stations | Smart EV Charging Slot Booking System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 fw-bold mb-1">Charging Stations</h1>
+    <p class="text-muted mb-0">Manage station locations and slot availability.</p>
+  </div>
+  <a href="{{ url_for('stations.new_station') }}" class="btn btn-dark">Add Station</a>
+</div>
+
+<div class="card shadow-sm border-0">
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>Station</th>
+            <th>Location</th>
+            <th>Geo</th>
+            <th>Slots</th>
+            <th>Type</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for station in stations %}
+            <tr>
+              <td>{{ station.station_name }}</td>
+              <td>{{ station.address }}, {{ station.city }}, {{ station.state }}</td>
+              <td>{{ station.latitude }}, {{ station.longitude }}</td>
+              <td>{{ station.available_slots }} / {{ station.total_slots }}</td>
+              <td>{{ station.charging_type }}</td>
+              <td class="text-end">
+                <div class="d-flex gap-2 justify-content-end">
+                  <a href="{{ url_for('stations.edit_station', station_id=station.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                  <form method="post" action="{{ url_for('stations.delete_station', station_id=station.id) }}" class="mb-0" onsubmit="return confirm('Delete this station?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="6" class="text-center text-muted py-4">No charging stations yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

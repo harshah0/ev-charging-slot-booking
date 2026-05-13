@@ -9,7 +9,10 @@
   <body class="bg-light">
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
       <div class="container">
-        <span class="navbar-brand fw-semibold">Smart EV Charging Slot Booking System</span>
+        <a class="navbar-brand fw-semibold text-decoration-none" href="{{ url_for('home.home') }}">Smart EV Charging Slot Booking System</a>
+        <div class="ms-auto me-3">
+          <a class="btn btn-outline-light btn-sm" href="{{ url_for('stations.list_stations') }}">Stations</a>
+        </div>
         <div class="d-flex gap-2">
           {% if current_user.is_authenticated %}
             <form method="post" action="{{ url_for('auth.logout') }}" class="mb-0">
