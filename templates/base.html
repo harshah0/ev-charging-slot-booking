@@ -12,6 +12,9 @@
       <div class="container">
         <a class="navbar-brand fw-semibold text-decoration-none" href="{{ url_for('home.home') }}">Smart EV Charging Slot Booking System</a>
         <div class="ms-auto me-3 d-flex gap-2">
+          {% if current_user.is_authenticated %}
+            <a class="btn btn-outline-light btn-sm" href="{{ url_for('dashboard.entry') }}">{{ 'Admin Dashboard' if current_user.is_admin() else 'Dashboard' }}</a>
+          {% endif %}
           <a class="btn btn-outline-light btn-sm" href="{{ url_for('stations.list_stations') }}">Stations</a>
           {% if current_user.is_authenticated and current_user.is_admin() %}
             <a class="btn btn-warning btn-sm" href="{{ url_for('stations.new_station') }}">+ Add Station</a>

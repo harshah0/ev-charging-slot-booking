@@ -24,14 +24,14 @@ def inject_auth_helpers():
 @auth_bp.get("/register")
 def register():
 	if current_user.is_authenticated:
-		return redirect(url_for("home.home"))
+		return redirect(url_for("dashboard.entry"))
 	return render_template("auth/register.html")
 
 
 @auth_bp.post("/register")
 def register_post():
 	if current_user.is_authenticated:
-		return redirect(url_for("home.home"))
+		return redirect(url_for("dashboard.entry"))
 
 	if not validate_csrf_token(request.form.get("csrf_token")):
 		flash("Your session has expired. Please try again.", "danger")
@@ -69,20 +69,20 @@ def register_post():
 	login_user(user)
 	session.permanent = True
 	flash("Account created successfully.", "success")
-	return redirect(url_for("home.home"))
+	return redirect(url_for("dashboard.entry"))
 
 
 @auth_bp.get("/login")
 def login():
 	if current_user.is_authenticated:
-		return redirect(url_for("home.home"))
+		return redirect(url_for("dashboard.entry"))
 	return render_template("auth/login.html")
 
 
 @auth_bp.post("/login")
 def login_post():
 	if current_user.is_authenticated:
-		return redirect(url_for("home.home"))
+		return redirect(url_for("dashboard.entry"))
 
 	if not validate_csrf_token(request.form.get("csrf_token")):
 		flash("Your session has expired. Please try again.", "danger")
@@ -109,7 +109,7 @@ def login_post():
 		return redirect(next_url)
 
 	flash("Logged in successfully.", "success")
-	return redirect(url_for("home.home"))
+	return redirect(url_for("dashboard.entry"))
 
 
 @auth_bp.post("/logout")

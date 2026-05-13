@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}My Dashboard | Smart EV Charging Slot Booking System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+  <div>
+    <p class="text-uppercase text-muted small mb-1">User dashboard</p>
+    <h1 class="h3 fw-bold mb-1">Welcome back, {{ current_user.username }}</h1>
+    <p class="text-muted mb-0">Track bookings, explore nearby stations, and book faster.</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{{ url_for('stations.list_stations') }}" class="btn btn-dark">Book a Station</a>
+    <a href="{{ url_for('stations.station_map') }}" class="btn btn-outline-secondary">View Map</a>
+    <a href="{{ url_for('bookings.history') }}" class="btn btn-outline-secondary">Full History</a>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-lg-3">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-1">Total Bookings</div>
+        <div class="display-6 fw-bold mb-0">{{ total_bookings }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-1">Active Bookings</div>
+        <div class="display-6 fw-bold mb-0">{{ active_bookings|length }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-1">Nearby Stations</div>
+        <div class="display-6 fw-bold mb-0">{{ nearby_stations|length }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-1">Quick Access</div>
+        <div class="fw-semibold mb-1">Fast booking flow</div>
+        <div class="small text-muted">Open stations, map, or history.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-lg-7">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <h2 class="h5 fw-bold mb-1">Active Bookings</h2>
+            <p class="text-muted mb-0">Your confirmed charging reservations.</p>
+          </div>
+          <a href="{{ url_for('bookings.history') }}" class="link-secondary text-decoration-none small">View all</a>
+        </div>
+
+        {% if active_bookings %}
+          <div class="vstack gap-3">
+            {% for booking in active_bookings %}
+              <div class="border rounded-3 p-3 bg-light">
+                <div class="d-flex justify-content-between gap-3 flex-wrap align-items-start">
+                  <div>
+                    <div class="fw-semibold">{{ booking.station.station_name }}</div>
+                    <div class="text-muted small">{{ booking.station.city }}, {{ booking.station.state }}</div>
+                    <div class="small mt-2">{{ booking.booking_time.strftime('%Y-%m-%d %H:%M UTC') }} · {{ booking.charging_duration }} min</div>
+                  </div>
+                  <div class="d-flex gap-2">
+                    <a href="{{ url_for('bookings.new_booking', station_id=booking.station.id) }}" class="btn btn-sm btn-outline-secondary">Book again</a>
+                    <form method="post" action="{{ url_for('bookings.cancel_booking', booking_id=booking.id) }}" class="mb-0" onsubmit="return confirm('Cancel this booking?');">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-center py-5 bg-light rounded-3">
+            <p class="fw-semibold mb-1">No active bookings</p>
+            <p class="text-muted mb-3">Pick a station and reserve your first slot.</p>
+            <a href="{{ url_for('stations.list_stations') }}" class="btn btn-dark">Browse Stations</a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <h2 class="h5 fw-bold mb-1">Nearby Stations</h2>
+            <p class="text-muted mb-0">Suggested from your recent activity.</p>
+          </div>
+          <a href="{{ url_for('stations.station_map') }}" class="link-secondary text-decoration-none small">Map</a>
+        </div>
+
+        <div class="vstack gap-3">
+          {% for station in nearby_stations %}
+            <div class="border rounded-3 p-3">
+              <div class="d-flex justify-content-between gap-3 flex-wrap">
+                <div>
+                  <div class="fw-semibold">{{ station.station_name }}</div>
+                  <div class="text-muted small">{{ station.city }}, {{ station.state }}</div>
+                  <div class="small mt-1">{{ station.available_slots }} / {{ station.total_slots }} slots</div>
+                </div>
+                <a href="{{ url_for('bookings.new_booking', station_id=station.id) }}" class="btn btn-sm btn-dark">Book</a>
+              </div>
+            </div>
+          {% else %}
+            <div class="text-center text-muted py-4">No nearby station suggestions yet.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0">
+  <div class="card-body p-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <h2 class="h5 fw-bold mb-1">Recent Booking History</h2>
+        <p class="text-muted mb-0">Your latest reservation activity.</p>
+      </div>
+      <a href="{{ url_for('bookings.history') }}" class="link-secondary text-decoration-none small">Open history</a>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Station</th>
+            <th>Time</th>
+            <th>Duration</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for booking in recent_history %}
+            <tr>
+              <td>
+                <div class="fw-semibold">{{ booking.station.station_name }}</div>
+                <div class="small text-muted">{{ booking.station.city }}, {{ booking.station.state }}</div>
+              </td>
+              <td>{{ booking.booking_time.strftime('%Y-%m-%d %H:%M UTC') }}</td>
+              <td>{{ booking.charging_duration }} min</td>
+              <td>
+                <span class="badge {% if booking.booking_status == 'confirmed' %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+                  {{ booking.booking_status|capitalize }}
+                </span>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="4" class="text-center text-muted py-4">No booking history yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
