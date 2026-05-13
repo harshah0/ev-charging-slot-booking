@@ -1,3 +1,5 @@
 from extensions import db
 
-__all__ = ["db"]
+from models.user import User
+
+__all__ = ["db", "User"]

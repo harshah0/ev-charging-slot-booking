@@ -12,6 +12,8 @@ def create_app(config_name: str = "default") -> Flask:
 
     init_extensions(app)
 
+    import models  # noqa: F401
+
     register_blueprints(app)
     return app
 
