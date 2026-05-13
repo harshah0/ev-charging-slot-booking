@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}My Bookings | Smart EV Charging Slot Booking System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 fw-bold mb-1">My Bookings</h1>
+    <p class="text-muted mb-0">Review and manage your charging reservations.</p>
+  </div>
+  <a href="{{ url_for('stations.list_stations') }}" class="btn btn-dark">Book a Station</a>
+</div>
+
+<div class="card shadow-sm border-0">
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>Station</th>
+            <th>Booking Time</th>
+            <th>Duration</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for booking in bookings %}
+            <tr>
+              <td>
+                <div class="fw-semibold">{{ booking.station.station_name }}</div>
+                <div class="small text-muted">{{ booking.station.city }}, {{ booking.station.state }}</div>
+              </td>
+              <td>{{ booking.booking_time.strftime('%Y-%m-%d %H:%M UTC') }}</td>
+              <td>{{ booking.charging_duration }} min</td>
+              <td>
+                <span class="badge {% if booking.booking_status == 'confirmed' %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+                  {{ booking.booking_status|capitalize }}
+                </span>
+              </td>
+              <td class="text-end">
+                {% if booking.booking_status == 'confirmed' %}
+                  <form method="post" action="{{ url_for('bookings.cancel_booking', booking_id=booking.id) }}" class="mb-0" onsubmit="return confirm('Cancel this booking?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
+                  </form>
+                {% else %}
+                  <span class="text-muted small">Cancelled</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="5" class="text-center text-muted py-4">You have no bookings yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

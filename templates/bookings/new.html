@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Book Station | Smart EV Charging Slot Booking System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-body p-4 p-md-5">
+        <h1 class="h3 fw-bold mb-2">Book Charging Station</h1>
+        <p class="text-muted mb-4">Reserve a slot at {{ station.station_name }}.</p>
+
+        <div class="row g-3 mb-4">
+          <div class="col-md-6">
+            <div class="p-3 bg-light rounded">
+              <div class="small text-muted">Station</div>
+              <div class="fw-semibold">{{ station.station_name }}</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="p-3 bg-light rounded">
+              <div class="small text-muted">Available Slots</div>
+              <div class="fw-semibold">{{ station.available_slots }} / {{ station.total_slots }}</div>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="p-3 bg-light rounded">
+              <div class="small text-muted">Location</div>
+              <div class="fw-semibold">{{ station.address }}, {{ station.city }}, {{ station.state }}</div>
+            </div>
+          </div>
+        </div>
+
+        <form method="post" action="{{ url_for('bookings.create_booking') }}" novalidate>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="station_id" value="{{ station.id }}">
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label" for="booking_time">Booking Time</label>
+              <input type="datetime-local" class="form-control" id="booking_time" name="booking_time" value="{{ form.get('booking_time', '') if form else '' }}" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="charging_duration">Charging Duration (minutes)</label>
+              <input type="number" min="15" class="form-control" id="charging_duration" name="charging_duration" value="{{ form.get('charging_duration', '') if form else '' }}" required>
+            </div>
+          </div>
+
+          <div class="mt-4 d-flex gap-2">
+            <button type="submit" class="btn btn-dark">Confirm Booking</button>
+            <a href="{{ url_for('stations.list_stations') }}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

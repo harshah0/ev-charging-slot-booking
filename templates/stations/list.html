@@ -38,6 +38,9 @@
               <td>{{ station.charging_type }}</td>
               <td class="text-end">
                 <div class="d-flex gap-2 justify-content-end">
+                  {% if current_user.is_authenticated %}
+                    <a href="{{ url_for('bookings.new_booking', station_id=station.id) }}" class="btn btn-sm btn-dark {% if station.available_slots <= 0 %}disabled{% endif %}">Book</a>
+                  {% endif %}
                   <a href="{{ url_for('stations.edit_station', station_id=station.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
                   <form method="post" action="{{ url_for('stations.delete_station', station_id=station.id) }}" class="mb-0" onsubmit="return confirm('Delete this station?');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

@@ -35,6 +35,8 @@ class User(UserMixin, db.Model):
         onupdate=func.now(),
     )
 
+    bookings = db.relationship("Booking", back_populates="user", cascade="all, delete-orphan")
+
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
 

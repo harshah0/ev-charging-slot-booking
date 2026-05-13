@@ -15,38 +15,38 @@
           <div class="row g-3">
             <div class="col-12">
               <label class="form-label" for="station_name">Station Name</label>
-              <input class="form-control" id="station_name" name="station_name" value="{{ form.get('station_name', station.station_name if station else '') if form or station else '' }}" required>
+              <input class="form-control" id="station_name" name="station_name" value="{{ form.get('station_name') if form else station.station_name if station else '' }}" required>
             </div>
             <div class="col-12">
               <label class="form-label" for="address">Address</label>
-              <input class="form-control" id="address" name="address" value="{{ form.get('address', station.address if station else '') if form or station else '' }}" required>
+              <input class="form-control" id="address" name="address" value="{{ form.get('address') if form else station.address if station else '' }}" required>
             </div>
             <div class="col-md-6">
               <label class="form-label" for="city">City</label>
-              <input class="form-control" id="city" name="city" value="{{ form.get('city', station.city if station else '') if form or station else '' }}" required>
+              <input class="form-control" id="city" name="city" value="{{ form.get('city') if form else station.city if station else '' }}" required>
             </div>
             <div class="col-md-6">
               <label class="form-label" for="state">State</label>
-              <input class="form-control" id="state" name="state" value="{{ form.get('state', station.state if station else '') if form or station else '' }}" required>
+              <input class="form-control" id="state" name="state" value="{{ form.get('state') if form else station.state if station else '' }}" required>
             </div>
             <div class="col-md-6">
               <label class="form-label" for="latitude">Latitude</label>
-              <input class="form-control" id="latitude" name="latitude" value="{{ form.get('latitude', station.latitude if station else '') if form or station else '' }}" required>
+              <input class="form-control" id="latitude" name="latitude" value="{{ form.get('latitude') if form else station.latitude if station else '' }}" required>
             </div>
             <div class="col-md-6">
               <label class="form-label" for="longitude">Longitude</label>
-              <input class="form-control" id="longitude" name="longitude" value="{{ form.get('longitude', station.longitude if station else '') if form or station else '' }}" required>
+              <input class="form-control" id="longitude" name="longitude" value="{{ form.get('longitude') if form else station.longitude if station else '' }}" required>
             </div>
             <div class="col-md-6">
               <label class="form-label" for="total_slots">Total Slots</label>
-              <input type="number" min="1" class="form-control" id="total_slots" name="total_slots" value="{{ form.get('total_slots', station.total_slots if station else '') if form or station else '' }}" required>
+              <input type="number" min="1" class="form-control" id="total_slots" name="total_slots" value="{{ form.get('total_slots') if form else station.total_slots if station else '' }}" required>
             </div>
             <div class="col-md-6">
               <label class="form-label" for="charging_type">Charging Type</label>
               <select class="form-select" id="charging_type" name="charging_type" required>
                 <option value="">Choose...</option>
                 {% for charging_type in charging_types %}
-                  <option value="{{ charging_type }}" {% if (form.get('charging_type') if form else station.charging_type if station else '') == charging_type %}selected{% endif %}>{{ charging_type }}</option>
+                  <option value="{{ charging_type }}" {% if (form.get('charging_type') if form else (station.charging_type if station else '')) == charging_type %}selected{% endif %}>{{ charging_type }}</option>
                 {% endfor %}
               </select>
             </div>

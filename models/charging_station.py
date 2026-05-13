@@ -27,6 +27,8 @@ class ChargingStation(db.Model):
         server_default=func.now(),
     )
 
+    bookings = db.relationship("Booking", back_populates="station")
+
     @validates("station_name")
     def validate_station_name(self, key: str, value: str) -> str:
         value = value.strip()

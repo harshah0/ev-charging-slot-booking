@@ -40,7 +40,7 @@ def station_map():
 @stations_bp.get("/new")
 @login_required
 def new_station():
-    return render_template("stations/form.html", station=None, charging_types=VALID_CHARGING_TYPES)
+    return render_template("stations/form.html", station=None, charging_types=VALID_CHARGING_TYPES, form=None)
 
 
 @stations_bp.post("")
@@ -84,7 +84,7 @@ def create_station():
 @login_required
 def edit_station(station_id: int):
     station = ChargingStation.query.get_or_404(station_id)
-    return render_template("stations/form.html", station=station, charging_types=VALID_CHARGING_TYPES)
+    return render_template("stations/form.html", station=station, charging_types=VALID_CHARGING_TYPES, form=None)
 
 
 @stations_bp.post("/<int:station_id>/update")
@@ -127,6 +127,10 @@ def delete_station(station_id: int):
     station = ChargingStation.query.get_or_404(station_id)
     if not validate_csrf_token(request.form.get("csrf_token")):
         flash("Your session has expired. Please try again.", "danger")
+        return redirect(url_for("stations.list_stations"))
+
+    if station.bookings:
+        flash("This station cannot be deleted because bookings already exist.", "danger")
         return redirect(url_for("stations.list_stations"))
 
     db.session.delete(station)
