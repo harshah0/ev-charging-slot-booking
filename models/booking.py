@@ -1,11 +1,20 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 
 from sqlalchemy import CheckConstraint, func, text
 from sqlalchemy.orm import validates
 
 from extensions import db
+from utils.datetime_utils import ensure_utc_datetime, utc_now
+
+
+class BookingLifecycleStatus(str, Enum):
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
 
 
 class Booking(db.Model):
@@ -29,9 +38,15 @@ class Booking(db.Model):
     booking_status = db.Column(
         db.String(20),
         nullable=False,
-        default="confirmed",
-        server_default=text("'confirmed'"),
+        default=BookingLifecycleStatus.ACTIVE.value,
+        server_default=text("'active'"),
     )
+    activated_at = db.Column(db.DateTime(timezone=True), nullable=False, server_default=func.now())
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    expired_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    cancelled_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    slot_released_at = db.Column(db.DateTime(timezone=True), nullable=True)
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
@@ -43,12 +58,44 @@ class Booking(db.Model):
 
     @property
     def is_active(self) -> bool:
-        return self.booking_status == "confirmed"
+        return self.booking_status == BookingLifecycleStatus.ACTIVE.value and not self.is_expired
+
+    @property
+    def is_expired(self) -> bool:
+        if self.booking_status == BookingLifecycleStatus.EXPIRED.value:
+            return True
+
+        expires_at = ensure_utc_datetime(self.expires_at)
+        return (
+            self.booking_status == BookingLifecycleStatus.ACTIVE.value
+            and expires_at is not None
+            and expires_at <= utc_now()
+        )
+
+    @property
+    def lifecycle_state(self) -> str:
+        if self.booking_status == BookingLifecycleStatus.ACTIVE.value and self.is_expired:
+            return BookingLifecycleStatus.EXPIRED.value
+        return self.booking_status
+
+    @property
+    def seconds_remaining(self) -> int:
+        expires_at = ensure_utc_datetime(self.expires_at)
+        if expires_at is None:
+            return 0
+        return max(int((expires_at - utc_now()).total_seconds()), 0)
 
     @validates("booking_status")
     def validate_booking_status(self, key: str, value: str) -> str:
         value = value.strip().lower()
-        valid_statuses = {"confirmed", "cancelled"}
+        if value == "confirmed":
+            value = BookingLifecycleStatus.ACTIVE.value
+        valid_statuses = {
+            BookingLifecycleStatus.ACTIVE.value,
+            BookingLifecycleStatus.COMPLETED.value,
+            BookingLifecycleStatus.EXPIRED.value,
+            BookingLifecycleStatus.CANCELLED.value,
+        }
         if value not in valid_statuses:
             raise ValueError("Invalid booking status.")
         return value
@@ -64,7 +111,14 @@ class Booking(db.Model):
     def validate_booking_time(self, key: str, value: datetime) -> datetime:
         if not isinstance(value, datetime):
             raise ValueError("Booking time must be a valid datetime value.")
-        return value
+        normalized_value = ensure_utc_datetime(value)
+        if normalized_value is None:
+            raise ValueError("Booking time must be a valid datetime value.")
+        return normalized_value
+
+    @validates("activated_at", "expires_at", "completed_at", "expired_at", "cancelled_at", "slot_released_at")
+    def validate_lifecycle_timestamp(self, key: str, value: datetime | None) -> datetime | None:
+        return ensure_utc_datetime(value)
 
     def __repr__(self) -> str:
         return (

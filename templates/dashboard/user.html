@@ -71,12 +71,22 @@
               <div class="border rounded-3 p-3 bg-light">
                 <div class="d-flex justify-content-between gap-3 flex-wrap align-items-start">
                   <div>
+                    <div class="mb-2">
+                      <span class="badge text-bg-primary">Active</span>
+                    </div>
                     <div class="fw-semibold">{{ booking.station.station_name }}</div>
                     <div class="text-muted small">{{ booking.station.city }}, {{ booking.station.state }}</div>
                     <div class="small mt-2">{{ booking.booking_time.strftime('%Y-%m-%d %H:%M UTC') }} · {{ booking.charging_duration }} min</div>
+                    <div class="small mt-1 text-primary fw-semibold">
+                      Ends in <span data-countdown-target="{{ booking.expires_at.isoformat() }}">--:--:--</span>
+                    </div>
                   </div>
                   <div class="d-flex gap-2">
                     <a href="{{ url_for('bookings.new_booking', station_id=booking.station.id) }}" class="btn btn-sm btn-outline-secondary">Book again</a>
+                    <form method="post" action="{{ url_for('bookings.complete_booking', booking_id=booking.id) }}" class="mb-0">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="btn btn-sm btn-success">Complete</button>
+                    </form>
                     <form method="post" action="{{ url_for('bookings.cancel_booking', booking_id=booking.id) }}" class="mb-0" onsubmit="return confirm('Cancel this booking?');">
                       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
@@ -151,6 +161,8 @@
         </thead>
         <tbody>
           {% for booking in recent_history %}
+            {% set lifecycle_state = booking.lifecycle_state %}
+            {% set badge_class = 'text-bg-primary' if lifecycle_state == 'active' else 'text-bg-success' if lifecycle_state == 'completed' else 'text-bg-warning' if lifecycle_state == 'expired' else 'text-bg-secondary' %}
             <tr>
               <td>
                 <div class="fw-semibold">{{ booking.station.station_name }}</div>
@@ -159,8 +171,8 @@
               <td>{{ booking.booking_time.strftime('%Y-%m-%d %H:%M UTC') }}</td>
               <td>{{ booking.charging_duration }} min</td>
               <td>
-                <span class="badge {% if booking.booking_status == 'confirmed' %}text-bg-success{% else %}text-bg-secondary{% endif %}">
-                  {{ booking.booking_status|capitalize }}
+                <span class="badge {{ badge_class }}">
+                  {{ lifecycle_state|replace('_', ' ')|title }}
                 </span>
               </td>
             </tr>
@@ -174,4 +186,27 @@
     </div>
   </div>
 </div>
+
+<script>
+  function formatCountdown(totalSeconds) {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    return [hours, minutes, seconds]
+      .map((value) => String(value).padStart(2, '0'))
+      .join(':');
+  }
+
+  function refreshCountdowns() {
+    document.querySelectorAll('[data-countdown-target]').forEach((element) => {
+      const target = new Date(element.dataset.countdownTarget).getTime();
+      const remaining = Math.max(Math.floor((target - Date.now()) / 1000), 0);
+      element.textContent = remaining > 0 ? formatCountdown(remaining) : 'Expired';
+    });
+  }
+
+  refreshCountdowns();
+  setInterval(refreshCountdowns, 1000);
+</script>
 {% endblock %}

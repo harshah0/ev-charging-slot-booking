@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import timedelta, timezone
 from decimal import Decimal
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
@@ -9,9 +8,17 @@ from sqlalchemy.orm import joinedload
 
 from extensions import db
 from models import Booking, ChargingStation, Transaction
+from models.booking import BookingLifecycleStatus
 from models.transaction import TransactionStatus, TransactionType
+from services.booking_lifecycle import (
+    booking_expires_at,
+    cancel_booking as cancel_booking_lifecycle,
+    complete_booking as complete_booking_lifecycle,
+    sync_booking_lifecycle,
+)
 from utils.booking_validation import validate_booking_payload
 from utils.csrf import validate_csrf_token
+from utils.datetime_utils import utc_now
 from utils.payment import calculate_booking_cost, format_currency, validate_wallet_balance
 
 bookings_bp = Blueprint("bookings", __name__, url_prefix="/bookings")
@@ -20,12 +27,7 @@ bookings_bp = Blueprint("bookings", __name__, url_prefix="/bookings")
 @bookings_bp.get("")
 @login_required
 def history():
-    bookings = (
-        Booking.query.options(joinedload(Booking.station))
-        .filter_by(user_id=current_user.id)
-        .order_by(Booking.created_at.desc())
-        .all()
-    )
+    bookings = Booking.query.options(joinedload(Booking.station)).filter_by(user_id=current_user.id).order_by(Booking.created_at.desc()).all()
     return render_template("bookings/history.html", bookings=bookings)
 
 
@@ -67,7 +69,8 @@ def create_booking():
     duplicate_booking = Booking.query.filter(
         Booking.user_id == current_user.id,
         Booking.station_id == station.id,
-        Booking.booking_status == "confirmed",
+        Booking.booking_status == BookingLifecycleStatus.ACTIVE.value,
+        Booking.expires_at > utc_now(),
     ).first()
     if duplicate_booking:
         flash("You already have an active booking for this station.", "danger")
@@ -85,13 +88,17 @@ def create_booking():
         return redirect(url_for("payment.recharge"))
 
     try:
+        expires_at = booking_expires_at(booking_time, charging_duration)
+
         # Create booking
         booking = Booking(
             user_id=current_user.id,
             station_id=station.id,
             booking_time=booking_time,
             charging_duration=charging_duration,
-            booking_status="confirmed",
+            booking_status=BookingLifecycleStatus.ACTIVE.value,
+            activated_at=utc_now(),
+            expires_at=expires_at,
         )
 
         # Deduct from wallet (atomic operation)
@@ -127,6 +134,41 @@ def create_booking():
         return render_template("bookings/new.html", station=station, form=request.form), 500
 
 
+@bookings_bp.post("/<int:booking_id>/complete")
+@login_required
+def complete_booking(booking_id: int):
+    if not validate_csrf_token(request.form.get("csrf_token")):
+        flash("Your session has expired. Please try again.", "danger")
+        return redirect(url_for("bookings.history"))
+
+    booking = (
+        Booking.query.options(joinedload(Booking.station))
+        .filter_by(id=booking_id, user_id=current_user.id)
+        .with_for_update()
+        .one_or_none()
+    )
+    if booking is None:
+        flash("Booking not found.", "danger")
+        return redirect(url_for("bookings.history"))
+
+    sync_booking_lifecycle(booking)
+    if booking.booking_status != BookingLifecycleStatus.ACTIVE.value:
+        flash("Only active bookings can be completed.", "info")
+        return redirect(url_for("bookings.history"))
+
+    if booking.station is None:
+        flash("Charging station no longer exists.", "danger")
+        return redirect(url_for("bookings.history"))
+
+    if not complete_booking_lifecycle(booking):
+        flash("Unable to complete this booking.", "danger")
+        return redirect(url_for("bookings.history"))
+
+    db.session.commit()
+    flash("Booking marked as completed.", "success")
+    return redirect(url_for("bookings.history"))
+
+
 @bookings_bp.post("/<int:booking_id>/cancel")
 @login_required
 def cancel_booking(booking_id: int):
@@ -134,23 +176,33 @@ def cancel_booking(booking_id: int):
         flash("Your session has expired. Please try again.", "danger")
         return redirect(url_for("bookings.history"))
 
-    booking = Booking.query.filter_by(id=booking_id, user_id=current_user.id).first_or_404()
-    if booking.booking_status == "cancelled":
-        flash("Booking is already cancelled.", "info")
-        return redirect(url_for("bookings.history"))
-
-    station = (
-        db.session.query(ChargingStation)
-        .filter(ChargingStation.id == booking.station_id)
+    booking = (
+        Booking.query.options(joinedload(Booking.station))
+        .filter_by(id=booking_id, user_id=current_user.id)
         .with_for_update()
         .one_or_none()
     )
+    if booking is None:
+        flash("Booking not found.", "danger")
+        return redirect(url_for("bookings.history"))
+
+    sync_booking_lifecycle(booking)
+    if booking.booking_status == BookingLifecycleStatus.CANCELLED.value:
+        flash("Booking is already cancelled.", "info")
+        return redirect(url_for("bookings.history"))
+
+    if booking.booking_status != BookingLifecycleStatus.ACTIVE.value:
+        flash("Only active bookings can be cancelled.", "info")
+        return redirect(url_for("bookings.history"))
+
+    station = booking.station
     if station is None:
         flash("Charging station no longer exists.", "danger")
         return redirect(url_for("bookings.history"))
 
-    booking.booking_status = "cancelled"
-    station.available_slots = min(station.available_slots + 1, station.total_slots)
+    if not cancel_booking_lifecycle(booking):
+        flash("Unable to cancel this booking.", "danger")
+        return redirect(url_for("bookings.history"))
 
     db.session.commit()
     flash("Booking cancelled successfully.", "info")

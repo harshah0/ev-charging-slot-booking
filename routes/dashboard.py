@@ -7,7 +7,9 @@ from sqlalchemy.orm import joinedload
 
 from extensions import db
 from models import Booking, ChargingStation, User
+from models.booking import BookingLifecycleStatus
 from utils.decorators import admin_required
+from utils.datetime_utils import utc_now
 
 dashboard_bp = Blueprint("dashboard", __name__, url_prefix="/dashboard")
 
@@ -48,9 +50,15 @@ def user_dashboard():
     if current_user.is_admin():
         return redirect(url_for("dashboard.admin_dashboard"))
 
+    now = utc_now()
+
     active_bookings = (
         Booking.query.options(joinedload(Booking.station))
-        .filter_by(user_id=current_user.id, booking_status="confirmed")
+        .filter(
+            Booking.user_id == current_user.id,
+            Booking.booking_status == BookingLifecycleStatus.ACTIVE.value,
+            Booking.expires_at > now,
+        )
         .order_by(Booking.booking_time.asc())
         .all()
     )
@@ -77,11 +85,36 @@ def user_dashboard():
 @dashboard_bp.get("/admin")
 @admin_required
 def admin_dashboard():
+    now = utc_now()
     total_users = db.session.query(func.count(User.id)).scalar() or 0
     total_stations = db.session.query(func.count(ChargingStation.id)).scalar() or 0
     total_bookings = db.session.query(func.count(Booking.id)).scalar() or 0
     active_bookings = (
-        db.session.query(func.count(Booking.id)).filter(Booking.booking_status == "confirmed").scalar() or 0
+        db.session.query(func.count(Booking.id))
+        .filter(
+            Booking.booking_status == BookingLifecycleStatus.ACTIVE.value,
+            Booking.expires_at > now,
+        )
+        .scalar()
+        or 0
+    )
+    completed_bookings = (
+        db.session.query(func.count(Booking.id))
+        .filter(Booking.booking_status == BookingLifecycleStatus.COMPLETED.value)
+        .scalar()
+        or 0
+    )
+    expired_bookings = (
+        db.session.query(func.count(Booking.id))
+        .filter(Booking.booking_status == BookingLifecycleStatus.EXPIRED.value)
+        .scalar()
+        or 0
+    )
+    cancelled_bookings = (
+        db.session.query(func.count(Booking.id))
+        .filter(Booking.booking_status == BookingLifecycleStatus.CANCELLED.value)
+        .scalar()
+        or 0
     )
 
     total_slots, available_slots = db.session.query(
@@ -111,6 +144,9 @@ def admin_dashboard():
         total_stations=total_stations,
         total_bookings=total_bookings,
         active_bookings=active_bookings,
+        completed_bookings=completed_bookings,
+        expired_bookings=expired_bookings,
+        cancelled_bookings=cancelled_bookings,
         total_slots=total_slots,
         available_slots=available_slots,
         occupied_slots=occupied_slots,

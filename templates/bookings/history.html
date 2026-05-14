@@ -20,12 +20,15 @@
             <th>Station</th>
             <th>Booking Time</th>
             <th>Duration</th>
+            <th>Countdown</th>
             <th>Status</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           {% for booking in bookings %}
+            {% set lifecycle_state = booking.lifecycle_state %}
+            {% set badge_class = 'text-bg-primary' if lifecycle_state == 'active' else 'text-bg-success' if lifecycle_state == 'completed' else 'text-bg-warning' if lifecycle_state == 'expired' else 'text-bg-secondary' %}
             <tr>
               <td>
                 <div class="fw-semibold">{{ booking.station.station_name }}</div>
@@ -34,16 +37,43 @@
               <td>{{ booking.booking_time.strftime('%Y-%m-%d %H:%M UTC') }}</td>
               <td>{{ booking.charging_duration }} min</td>
               <td>
-                <span class="badge {% if booking.booking_status == 'confirmed' %}text-bg-success{% else %}text-bg-secondary{% endif %}">
-                  {{ booking.booking_status|capitalize }}
+                {% if lifecycle_state == 'active' %}
+                  <div class="fw-semibold text-primary" data-countdown-target="{{ booking.expires_at.isoformat() }}">--:--:--</div>
+                  <div class="small text-muted">until auto-expiry</div>
+                {% elif lifecycle_state == 'completed' and booking.completed_at %}
+                  <div class="small text-muted">Completed at</div>
+                  <div class="fw-semibold">{{ booking.completed_at.strftime('%Y-%m-%d %H:%M UTC') }}</div>
+                {% elif lifecycle_state == 'expired' and booking.expired_at %}
+                  <div class="small text-muted">Expired at</div>
+                  <div class="fw-semibold">{{ booking.expired_at.strftime('%Y-%m-%d %H:%M UTC') }}</div>
+                {% elif lifecycle_state == 'cancelled' and booking.cancelled_at %}
+                  <div class="small text-muted">Cancelled at</div>
+                  <div class="fw-semibold">{{ booking.cancelled_at.strftime('%Y-%m-%d %H:%M UTC') }}</div>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge {{ badge_class }}">
+                  {{ lifecycle_state|replace('_', ' ')|title }}
                 </span>
               </td>
               <td class="text-end">
-                {% if booking.booking_status == 'confirmed' %}
-                  <form method="post" action="{{ url_for('bookings.cancel_booking', booking_id=booking.id) }}" class="mb-0" onsubmit="return confirm('Cancel this booking?');">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
-                  </form>
+                {% if lifecycle_state == 'active' %}
+                  <div class="d-flex justify-content-end gap-2 flex-wrap">
+                    <form method="post" action="{{ url_for('bookings.complete_booking', booking_id=booking.id) }}" class="mb-0">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="btn btn-sm btn-success">Complete</button>
+                    </form>
+                    <form method="post" action="{{ url_for('bookings.cancel_booking', booking_id=booking.id) }}" class="mb-0" onsubmit="return confirm('Cancel this booking?');">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
+                    </form>
+                  </div>
+                {% elif lifecycle_state == 'completed' %}
+                  <span class="text-muted small">Finished</span>
+                {% elif lifecycle_state == 'expired' %}
+                  <span class="text-muted small">Expired automatically</span>
                 {% else %}
                   <span class="text-muted small">Cancelled</span>
                 {% endif %}
@@ -51,7 +81,7 @@
             </tr>
           {% else %}
             <tr>
-              <td colspan="5" class="text-center text-muted py-4">You have no bookings yet.</td>
+              <td colspan="6" class="text-center text-muted py-4">You have no bookings yet.</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -59,4 +89,27 @@
     </div>
   </div>
 </div>
+
+<script>
+  function formatCountdown(totalSeconds) {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    return [hours, minutes, seconds]
+      .map((value) => String(value).padStart(2, '0'))
+      .join(':');
+  }
+
+  function refreshCountdowns() {
+    document.querySelectorAll('[data-countdown-target]').forEach((element) => {
+      const target = new Date(element.dataset.countdownTarget).getTime();
+      const remaining = Math.max(Math.floor((target - Date.now()) / 1000), 0);
+      element.textContent = remaining > 0 ? formatCountdown(remaining) : 'Expired';
+    });
+  }
+
+  refreshCountdowns();
+  setInterval(refreshCountdowns, 1000);
+</script>
 {% endblock %}
