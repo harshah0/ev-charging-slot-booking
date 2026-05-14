@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Transaction History | Smart EV Charging Slot Booking System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+  <div>
+    <h1 class="h3 fw-bold mb-1">Transaction History</h1>
+    <p class="text-muted mb-0">View all wallet transactions and activity.</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{{ url_for('payment.recharge') }}" class="btn btn-dark">+ Recharge Wallet</a>
+    <a href="{{ url_for('dashboard.entry') }}" class="btn btn-outline-secondary">Back to Dashboard</a>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-md-6 col-lg-3">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-1">Current Balance</div>
+        <div class="display-6 fw-bold mb-0">₹{{ "%.2f"|format(current_user.wallet_balance) }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6 col-lg-3">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-1">Total Transactions</div>
+        <div class="display-6 fw-bold mb-0">{{ transactions|length }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6 col-lg-3">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-1">Total Recharges</div>
+        <div class="display-6 fw-bold mb-0">₹{{ "%.2f"|format(transactions|selectattr('transaction_type', 'equalto', 'recharge')|map(attribute='amount')|sum) }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6 col-lg-3">
+    <div class="card shadow-sm border-0 h-100">
+      <div class="card-body">
+        <div class="text-muted small mb-1">Total Spent</div>
+        <div class="display-6 fw-bold mb-0">₹{{ "%.2f"|format(transactions|selectattr('transaction_type', 'equalto', 'booking')|map(attribute='amount')|sum|abs) }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0">
+  <div class="card-body">
+    <div class="mb-3">
+      <h2 class="h5 fw-bold mb-1">Transaction Details</h2>
+      <p class="text-muted mb-0">All wallet activity in chronological order.</p>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Date & Time</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th class="text-end">Amount</th>
+            <th class="text-end">Balance After</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for transaction in transactions %}
+            <tr>
+              <td>
+                <div class="fw-semibold">{{ transaction.created_at.strftime('%Y-%m-%d') }}</div>
+                <div class="small text-muted">{{ transaction.created_at.strftime('%H:%M UTC') }}</div>
+              </td>
+              <td>
+                <span class="badge {% if transaction.transaction_type == 'recharge' %}text-bg-success{% elif transaction.transaction_type == 'booking' %}text-bg-info{% else %}text-bg-secondary{% endif %}">
+                  {{ transaction.transaction_type|capitalize }}
+                </span>
+              </td>
+              <td>
+                {% if transaction.transaction_type == 'booking' and transaction.booking %}
+                  <div class="fw-semibold">{{ transaction.booking.station.station_name }}</div>
+                  <div class="small text-muted">{{ transaction.booking.charging_duration }} minutes</div>
+                {% else %}
+                  <div class="fw-semibold">{{ transaction.description }}</div>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <span class="{% if transaction.is_debit %}text-danger{% else %}text-success{% endif %} fw-semibold">
+                  {% if transaction.is_debit %}-{% else %}+{% endif %}₹{{ "%.2f"|format(transaction.amount|abs) }}
+                </span>
+              </td>
+              <td class="text-end">
+                <div class="fw-semibold">₹{{ "%.2f"|format(transaction.balance_after) }}</div>
+              </td>
+              <td>
+                <span class="badge {% if transaction.status == 'completed' %}text-bg-success{% elif transaction.status == 'pending' %}text-bg-warning{% else %}text-bg-danger{% endif %}">
+                  {{ transaction.status|capitalize }}
+                </span>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="6" class="text-center text-muted py-4">No transactions yet. <a href="{{ url_for('payment.recharge') }}">Recharge your wallet</a> to get started.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

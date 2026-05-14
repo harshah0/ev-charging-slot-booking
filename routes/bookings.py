@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 from datetime import timedelta, timezone
+from decimal import Decimal
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
 from extensions import db
-from models import Booking, ChargingStation
+from models import Booking, ChargingStation, Transaction
+from models.transaction import TransactionStatus, TransactionType
 from utils.booking_validation import validate_booking_payload
 from utils.csrf import validate_csrf_token
+from utils.payment import calculate_booking_cost, format_currency, validate_wallet_balance
 
 bookings_bp = Blueprint("bookings", __name__, url_prefix="/bookings")
 
@@ -70,21 +73,58 @@ def create_booking():
         flash("You already have an active booking for this station.", "danger")
         return render_template("bookings/new.html", station=station, form=request.form), 409
 
-    booking = Booking(
-        user_id=current_user.id,
-        station_id=station.id,
-        booking_time=booking_time,
-        charging_duration=charging_duration,
-        booking_status="confirmed",
+    # Calculate booking cost
+    booking_cost = calculate_booking_cost(charging_duration)
+
+    # Validate wallet balance
+    is_valid, error_msg = validate_wallet_balance(
+        Decimal(current_user.wallet_balance), booking_cost
     )
+    if not is_valid:
+        flash(error_msg, "danger")
+        return redirect(url_for("payment.recharge"))
 
-    station.available_slots = station.available_slots - 1
+    try:
+        # Create booking
+        booking = Booking(
+            user_id=current_user.id,
+            station_id=station.id,
+            booking_time=booking_time,
+            charging_duration=charging_duration,
+            booking_status="confirmed",
+        )
 
-    db.session.add(booking)
-    db.session.commit()
+        # Deduct from wallet (atomic operation)
+        current_user.wallet_balance = Decimal(current_user.wallet_balance) - booking_cost
+        station.available_slots = station.available_slots - 1
 
-    flash("Your booking was created successfully.", "success")
-    return redirect(url_for("bookings.history"))
+        # Record transaction
+        transaction = Transaction(
+            user_id=current_user.id,
+            booking_id=None,  # Will be set after booking is created
+            transaction_type=TransactionType.BOOKING.value,
+            amount=-booking_cost,  # Negative for debit
+            status=TransactionStatus.COMPLETED.value,
+            description=f"Booking at {station.station_name} for {charging_duration} minutes",
+            balance_after=Decimal(current_user.wallet_balance),
+        )
+
+        db.session.add(booking)
+        db.session.flush()  # Get booking ID before committing
+        transaction.booking_id = booking.id
+        db.session.add(transaction)
+        db.session.commit()
+
+        flash(
+            f"Your booking was created successfully. Charged: {format_currency(booking_cost)}. Remaining balance: {format_currency(Decimal(current_user.wallet_balance))}",
+            "success",
+        )
+        return redirect(url_for("bookings.history"))
+
+    except Exception as e:
+        db.session.rollback()
+        flash("An error occurred while creating your booking. Please try again.", "danger")
+        return render_template("bookings/new.html", station=station, form=request.form), 500
 
 
 @bookings_bp.post("/<int:booking_id>/cancel")

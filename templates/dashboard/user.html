@@ -13,6 +13,7 @@
     <a href="{{ url_for('stations.list_stations') }}" class="btn btn-dark">Book a Station</a>
     <a href="{{ url_for('stations.station_map') }}" class="btn btn-outline-secondary">View Map</a>
     <a href="{{ url_for('bookings.history') }}" class="btn btn-outline-secondary">Full History</a>
+    <a href="{{ url_for('payment.transaction_history') }}" class="btn btn-outline-secondary">Transactions</a>
   </div>
 </div>
 
@@ -44,9 +45,9 @@
   <div class="col-sm-6 col-lg-3">
     <div class="card shadow-sm border-0 h-100">
       <div class="card-body">
-        <div class="text-muted small mb-1">Quick Access</div>
-        <div class="fw-semibold mb-1">Fast booking flow</div>
-        <div class="small text-muted">Open stations, map, or history.</div>
+        <div class="text-muted small mb-1">Wallet Balance</div>
+        <div class="display-6 fw-bold mb-3">₹{{ "%.2f"|format(current_user.wallet_balance) }}</div>
+        <a href="{{ url_for('payment.recharge') }}" class="btn btn-sm btn-dark w-100">Recharge</a>
       </div>
     </div>
   </div>

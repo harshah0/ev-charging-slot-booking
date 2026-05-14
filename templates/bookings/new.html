@@ -23,6 +23,18 @@
               <div class="fw-semibold">{{ station.available_slots }} / {{ station.total_slots }}</div>
             </div>
           </div>
+          <div class="col-md-6">
+            <div class="p-3 bg-light rounded">
+              <div class="small text-muted">Charging Type</div>
+              <div class="fw-semibold">{{ station.charging_type }}</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="p-3 bg-light rounded">
+              <div class="small text-muted">Wallet Balance</div>
+              <div class="fw-semibold">₹{{ "%.2f"|format(current_user.wallet_balance) }}</div>
+            </div>
+          </div>
           <div class="col-12">
             <div class="p-3 bg-light rounded">
               <div class="small text-muted">Location</div>
@@ -35,7 +47,7 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="station_id" value="{{ station.id }}">
 
-          <div class="row g-3">
+          <div class="row g-3 mb-4">
             <div class="col-md-6">
               <label class="form-label" for="booking_time">Booking Time</label>
               <input type="datetime-local" class="form-control" id="booking_time" name="booking_time" value="{{ form.get('booking_time', '') if form else '' }}" required>
@@ -43,6 +55,29 @@
             <div class="col-md-6">
               <label class="form-label" for="charging_duration">Charging Duration (minutes)</label>
               <input type="number" min="15" class="form-control" id="charging_duration" name="charging_duration" value="{{ form.get('charging_duration', '') if form else '' }}" required>
+            </div>
+          </div>
+
+          <div class="bg-light rounded-3 p-3 mb-4">
+            <div class="d-flex justify-content-between mb-2">
+              <span class="text-muted">Base rate</span>
+              <span>₹0.50 per minute</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+              <span class="text-muted">Duration</span>
+              <span id="duration-display">0 minutes</span>
+            </div>
+            <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+              <span class="text-muted">Estimated Cost</span>
+              <span class="fw-bold" id="cost-display">₹0.00</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+              <span class="text-muted">Wallet Balance</span>
+              <span id="balance-display">₹{{ "%.2f"|format(current_user.wallet_balance) }}</span>
+            </div>
+            <div class="d-flex justify-content-between">
+              <span class="text-muted">Balance After Booking</span>
+              <span class="fw-bold" id="balance-after-display">₹{{ "%.2f"|format(current_user.wallet_balance) }}</span>
             </div>
           </div>
 
@@ -55,4 +90,32 @@
     </div>
   </div>
 </div>
+
+<script>
+  const durationInput = document.getElementById('charging_duration');
+  const durationDisplay = document.getElementById('duration-display');
+  const costDisplay = document.getElementById('cost-display');
+  const balanceAfterDisplay = document.getElementById('balance-after-display');
+  const currentBalance = {{ current_user.wallet_balance }};
+  const baseRate = 0.50;
+
+  function updateCostDisplay() {
+    const duration = parseInt(durationInput.value) || 0;
+    const cost = duration * baseRate;
+    const balanceAfter = currentBalance - cost;
+    
+    durationDisplay.textContent = duration + ' minute' + (duration !== 1 ? 's' : '');
+    costDisplay.textContent = '₹' + cost.toFixed(2);
+    balanceAfterDisplay.textContent = '₹' + balanceAfter.toFixed(2);
+    
+    if (balanceAfter < 0) {
+      balanceAfterDisplay.classList.add('text-danger');
+    } else {
+      balanceAfterDisplay.classList.remove('text-danger');
+    }
+  }
+
+  durationInput.addEventListener('input', updateCostDisplay);
+  durationInput.addEventListener('change', updateCostDisplay);
+</script>
 {% endblock %}
