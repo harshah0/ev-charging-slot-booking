@@ -6,6 +6,7 @@ from extensions import db
 from extensions import init_extensions
 from routes import register_blueprints
 from services.booking_lifecycle import expire_due_bookings
+import os
 
 
 def create_app(config_name: str = "default") -> Flask:
@@ -18,6 +19,17 @@ def create_app(config_name: str = "default") -> Flask:
     import models  # noqa: F401
 
     register_blueprints(app)
+
+    # In production, serve static files efficiently using WhiteNoise if available
+    try:
+        if not app.debug and os.getenv("USE_WHITENOISE", "true").lower() == "true":
+            from whitenoise import WhiteNoise
+
+            static_root = app.static_folder or "static"
+            app.wsgi_app = WhiteNoise(app.wsgi_app, root=static_root, prefix="/static/")
+    except Exception:
+        # Do not break startup if whitenoise is not available; platform may serve static files instead
+        pass
 
     @app.before_request
     def reconcile_booking_lifecycle():

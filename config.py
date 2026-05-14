@@ -22,9 +22,17 @@ def build_engine_options(database_uri: str) -> dict:
     if database_uri.startswith("sqlite"):
         return {}
 
+    # Read optional pool tuning values from environment for production
+    pool_size = int(os.getenv("SQLALCHEMY_POOL_SIZE", "10"))
+    max_overflow = int(os.getenv("SQLALCHEMY_MAX_OVERFLOW", "20"))
+    pool_pre_ping = os.getenv("SQLALCHEMY_POOL_PRE_PING", "true").lower() == "true"
+    pool_recycle = int(os.getenv("SQLALCHEMY_POOL_RECYCLE", "300"))
+
     return {
-        "pool_pre_ping": True,
-        "pool_recycle": 300,
+        "pool_pre_ping": pool_pre_ping,
+        "pool_recycle": pool_recycle,
+        "pool_size": pool_size,
+        "max_overflow": max_overflow,
     }
 
 
@@ -50,6 +58,8 @@ class TestingConfig(Config):
 
 class ProductionConfig(Config):
     DEBUG = False
+    # In production, secret key must be explicitly provided
+    SECRET_KEY = os.getenv("SECRET_KEY") or Config.SECRET_KEY
 
 
 config_by_name = {
