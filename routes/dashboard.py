@@ -4,9 +4,13 @@ from flask import Blueprint, redirect, render_template, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
+from sqlalchemy import cast, Date
+from datetime import timedelta
 
 from extensions import db
 from models import Booking, ChargingStation, User
+from models import Transaction
+from models.transaction import TransactionType, TransactionStatus
 from models.booking import BookingLifecycleStatus
 from utils.decorators import admin_required
 from utils.datetime_utils import utc_now
@@ -138,6 +142,75 @@ def admin_dashboard():
         .all()
     )
 
+    # Analytics: bookings per day (last 30 days)
+    days = 30
+    start_date = (now - timedelta(days=days - 1)).date()
+    day_col = func.date(Booking.booking_time)
+    bookings_per_day_rows = (
+        db.session.query(day_col.label('day'), func.count(Booking.id))
+        .filter(Booking.booking_time >= start_date)
+        .group_by(day_col)
+        .order_by(day_col)
+        .all()
+    )
+    bookings_per_day_map = {str(r[0]): int(r[1]) for r in bookings_per_day_rows}
+    bookings_per_day_labels = []
+    bookings_per_day_counts = []
+    for i in range(days):
+        d = start_date + timedelta(days=i)
+        key = str(d)
+        bookings_per_day_labels.append(d.isoformat())
+        bookings_per_day_counts.append(int(bookings_per_day_map.get(key, 0)))
+
+    # Recharge trends (last 30 days)
+    trans_day_col = func.date(Transaction.created_at)
+    recharge_rows = (
+        db.session.query(trans_day_col.label('day'), func.coalesce(func.sum(Transaction.amount), 0))
+        .filter(
+            Transaction.transaction_type == TransactionType.RECHARGE.value,
+            Transaction.status == TransactionStatus.COMPLETED.value,
+            Transaction.created_at >= start_date,
+        )
+        .group_by(trans_day_col)
+        .order_by(trans_day_col)
+        .all()
+    )
+    recharge_map = {str(r[0]): float(r[1]) for r in recharge_rows}
+    recharge_labels = bookings_per_day_labels
+    recharge_values = [float(recharge_map.get(d, 0.0)) for d in recharge_labels]
+
+    # Booking status distribution
+    status_rows = (
+        db.session.query(Booking.booking_status, func.count(Booking.id))
+        .group_by(Booking.booking_status)
+        .all()
+    )
+    status_labels = [r[0].title() for r in status_rows]
+    status_counts = [int(r[1]) for r in status_rows]
+
+    # Most-used stations
+    station_usage_rows = (
+        db.session.query(ChargingStation.station_name, func.count(Booking.id).label('cnt'))
+        .join(Booking, Booking.station_id == ChargingStation.id)
+        .group_by(ChargingStation.id)
+        .order_by(func.count(Booking.id).desc())
+        .limit(10)
+        .all()
+    )
+    top_stations = [r[0] for r in station_usage_rows]
+    top_station_counts = [int(r[1]) for r in station_usage_rows]
+
+    # Total wallet revenue from bookings (sum of booking charges)
+    total_wallet_revenue = (
+        db.session.query(func.coalesce(func.sum(-Transaction.amount), 0))
+        .filter(
+            Transaction.transaction_type == TransactionType.BOOKING.value,
+            Transaction.status == TransactionStatus.COMPLETED.value,
+        )
+        .scalar()
+        or 0
+    )
+
     return render_template(
         "dashboard/admin.html",
         total_users=total_users,
@@ -153,4 +226,14 @@ def admin_dashboard():
         slot_utilization=slot_utilization,
         recent_bookings=recent_bookings,
         station_shortcuts=station_shortcuts,
+        # Analytics payloads
+        bookings_per_day_labels=bookings_per_day_labels,
+        bookings_per_day_counts=bookings_per_day_counts,
+        recharge_labels=recharge_labels,
+        recharge_values=recharge_values,
+        status_labels=status_labels,
+        status_counts=status_counts,
+        top_stations=top_stations,
+        top_station_counts=top_station_counts,
+        total_wallet_revenue=total_wallet_revenue,
     )

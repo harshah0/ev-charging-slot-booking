@@ -174,4 +174,125 @@
     </div>
   </div>
 </div>
+
+<div class="card shadow-sm border-0 mt-4">
+  <div class="card-body p-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <h2 class="h5 fw-bold mb-1">Analytics</h2>
+        <p class="text-muted mb-0">Trends and KPIs for platform health.</p>
+      </div>
+      <div class="d-flex gap-3 align-items-center">
+        <div class="text-muted small">Total revenue</div>
+        <div class="fw-bold">₹{{ "%.2f"|format(total_wallet_revenue) }}</div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-lg-6">
+        <div class="card-modern p-3 h-100">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="fw-semibold">Bookings (last 30 days)</div>
+            <div id="bookings-loading" class="text-muted small">Loading…</div>
+          </div>
+          <canvas id="chartBookings" height="160"></canvas>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card-modern p-3 h-100">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="fw-semibold">Recharges (last 30 days)</div>
+            <div id="recharge-loading" class="text-muted small">Loading…</div>
+          </div>
+          <canvas id="chartRecharge" height="160"></canvas>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="card-modern p-3 h-100">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="fw-semibold">Booking Status Distribution</div>
+            <div id="status-loading" class="text-muted small">Loading…</div>
+          </div>
+          <canvas id="chartStatus" height="160"></canvas>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="card-modern p-3 h-100">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="fw-semibold">Top Stations</div>
+            <div id="stations-loading" class="text-muted small">Loading…</div>
+          </div>
+          {% if top_stations %}
+            <canvas id="chartStations" height="160"></canvas>
+          {% else %}
+            <div class="empty-state">No station usage data yet.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% block extra_scripts %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Prepare data from server
+    const bookingsLabels = {{ bookings_per_day_labels|tojson }};
+    const bookingsData = {{ bookings_per_day_counts|tojson }};
+
+    const rechargeLabels = {{ recharge_labels|tojson }};
+    const rechargeData = {{ recharge_values|tojson }};
+
+    const statusLabels = {{ status_labels|tojson }};
+    const statusData = {{ status_counts|tojson }};
+
+    const topStations = {{ top_stations|tojson }};
+    const topStationCounts = {{ top_station_counts|tojson }};
+
+    function renderCharts(){
+      // Bookings line
+      const ctxB = document.getElementById('chartBookings').getContext('2d');
+      new Chart(ctxB, {
+        type: 'line',
+        data: {labels: bookingsLabels, datasets: [{label: 'Bookings', data: bookingsData, borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.08)', fill:true, tension:0.3} ]},
+        options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}
+      });
+      document.getElementById('bookings-loading').style.display='none';
+
+      // Recharge line
+      const ctxR = document.getElementById('chartRecharge').getContext('2d');
+      new Chart(ctxR, {
+        type:'line',
+        data:{labels:rechargeLabels, datasets:[{label:'Recharges', data:rechargeData, borderColor:'#198754', backgroundColor:'rgba(25,135,84,0.08)', fill:true, tension:0.3}]},
+        options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}
+      });
+      document.getElementById('recharge-loading').style.display='none';
+
+      // Status doughnut
+      const ctxS = document.getElementById('chartStatus').getContext('2d');
+      new Chart(ctxS, {
+        type:'doughnut',
+        data:{labels:statusLabels, datasets:[{data:statusData, backgroundColor:['#0d6efd','#198754','#ffc107','#6c757d']}]},
+        options:{responsive:true, maintainAspectRatio:false}
+      });
+      document.getElementById('status-loading').style.display='none';
+
+      // Top stations bar
+      if(topStations.length){
+        const ctxT = document.getElementById('chartStations').getContext('2d');
+        new Chart(ctxT, {
+          type:'bar',
+          data:{labels:topStations, datasets:[{label:'Bookings', data:topStationCounts, backgroundColor:'#6f42c1'}]},
+          options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{maxRotation:45,minRotation:0}}}}
+        });
+        document.getElementById('stations-loading').style.display='none';
+      }
+    }
+
+    // Defer rendering for small loading effect
+    setTimeout(renderCharts, 300);
+  </script>
+{% endblock %}
 {% endblock %}
