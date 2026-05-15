@@ -18,36 +18,32 @@
 </div>
 
 <div class="row g-3 mb-4">
-  <div class="col-sm-6 col-lg-3">
-    <div class="card shadow-sm border-0 h-100">
-      <div class="card-body">
-        <div class="text-muted small mb-1">Total Bookings</div>
-        <div class="display-6 fw-bold mb-0">{{ total_bookings }}</div>
-      </div>
+  <div class="col-6 col-md-3">
+    <div class="card-modern stat-card h-100 hover-lift">
+      <div class="text-muted small mb-1">Total Bookings</div>
+      <div class="display-6 fw-bold mb-0">{{ total_bookings }}</div>
     </div>
   </div>
-  <div class="col-sm-6 col-lg-3">
-    <div class="card shadow-sm border-0 h-100">
-      <div class="card-body">
-        <div class="text-muted small mb-1">Active Bookings</div>
-        <div class="display-6 fw-bold mb-0">{{ active_bookings|length }}</div>
-      </div>
+  <div class="col-6 col-md-3">
+    <div class="card-modern stat-card h-100 hover-lift">
+      <div class="text-muted small mb-1">Active Bookings</div>
+      <div class="display-6 fw-bold mb-0">{{ active_bookings|length }}</div>
     </div>
   </div>
-  <div class="col-sm-6 col-lg-3">
-    <div class="card shadow-sm border-0 h-100">
-      <div class="card-body">
-        <div class="text-muted small mb-1">Nearby Stations</div>
-        <div class="display-6 fw-bold mb-0">{{ nearby_stations|length }}</div>
-      </div>
+  <div class="col-6 col-md-3">
+    <div class="card-modern stat-card h-100 hover-lift">
+      <div class="text-muted small mb-1">Nearby Stations</div>
+      <div class="display-6 fw-bold mb-0">{{ nearby_stations|length }}</div>
     </div>
   </div>
-  <div class="col-sm-6 col-lg-3">
-    <div class="card shadow-sm border-0 h-100">
-      <div class="card-body">
-        <div class="text-muted small mb-1">Wallet Balance</div>
-        <div class="display-6 fw-bold mb-3">₹{{ "%.2f"|format(current_user.wallet_balance) }}</div>
-        <a href="{{ url_for('payment.recharge') }}" class="btn btn-sm btn-dark w-100">Recharge</a>
+  <div class="col-6 col-md-3">
+    <div class="card-modern stat-card h-100 hover-lift">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <div class="text-muted small">Wallet Balance</div>
+          <div class="fw-bold">₹{{ "%.2f"|format(current_user.wallet_balance) }}</div>
+        </div>
+        <a href="{{ url_for('payment.recharge') }}" class="btn btn-dark btn-sm">Recharge</a>
       </div>
     </div>
   </div>
@@ -68,18 +64,14 @@
         {% if active_bookings %}
           <div class="vstack gap-3">
             {% for booking in active_bookings %}
-              <div class="border rounded-3 p-3 bg-light">
+              <div class="card-modern p-3 hover-lift">
                 <div class="d-flex justify-content-between gap-3 flex-wrap align-items-start">
                   <div>
-                    <div class="mb-2">
-                      <span class="badge text-bg-primary">Active</span>
-                    </div>
+                    <div class="mb-2"><span class="badge text-bg-primary">Active</span></div>
                     <div class="fw-semibold">{{ booking.station.station_name }}</div>
                     <div class="text-muted small">{{ booking.station.city }}, {{ booking.station.state }}</div>
                     <div class="small mt-2">{{ booking.booking_time.strftime('%Y-%m-%d %H:%M UTC') }} · {{ booking.charging_duration }} min</div>
-                    <div class="small mt-1 text-primary fw-semibold">
-                      Ends in <span data-countdown-target="{{ booking.expires_at.isoformat() }}">--:--:--</span>
-                    </div>
+                    <div class="small mt-1 text-primary fw-semibold">Ends in <span data-countdown-target="{{ booking.expires_at.isoformat() }}">--:--:--</span></div>
                   </div>
                   <div class="d-flex gap-2">
                     <a href="{{ url_for('bookings.new_booking', station_id=booking.station.id) }}" class="btn btn-sm btn-outline-secondary">Book again</a>
@@ -97,9 +89,9 @@
             {% endfor %}
           </div>
         {% else %}
-          <div class="text-center py-5 bg-light rounded-3">
-            <p class="fw-semibold mb-1">No active bookings</p>
-            <p class="text-muted mb-3">Pick a station and reserve your first slot.</p>
+          <div class="empty-state">
+            <div class="fw-semibold">No active bookings</div>
+            <p class="lead mb-3">Pick a station and reserve your first slot.</p>
             <a href="{{ url_for('stations.list_stations') }}" class="btn btn-dark">Browse Stations</a>
           </div>
         {% endif %}
@@ -120,7 +112,7 @@
 
         <div class="vstack gap-3">
           {% for station in nearby_stations %}
-            <div class="border rounded-3 p-3">
+            <div class="card-modern p-3 hover-lift">
               <div class="d-flex justify-content-between gap-3 flex-wrap">
                 <div>
                   <div class="fw-semibold">{{ station.station_name }}</div>
@@ -150,7 +142,7 @@
     </div>
 
     <div class="table-responsive">
-      <table class="table align-middle mb-0">
+      <table class="table align-middle mb-0 table-mobile">
         <thead>
           <tr>
             <th>Station</th>
