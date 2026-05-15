@@ -3,8 +3,6 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy.orm import joinedload
-
 from extensions import db
 from models.booking import Booking
 from models.charging_station import ChargingStation
@@ -116,7 +114,7 @@ def sync_booking_lifecycle(booking: Booking, reference_time: datetime | None = N
 def expire_due_bookings(reference_time: datetime | None = None) -> int:
     now = ensure_utc_datetime(reference_time) or utc_now()
     due_bookings = (
-        Booking.query.options(joinedload(Booking.station))
+        Booking.query
         .filter(
             Booking.booking_status == BookingLifecycleStatus.ACTIVE.value,
             Booking.expires_at.isnot(None),
