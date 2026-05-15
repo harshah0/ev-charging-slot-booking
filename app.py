@@ -1,3 +1,6 @@
+import os
+
+import click
 from flask import Flask
 from flask_login import current_user
 
@@ -6,7 +9,7 @@ from extensions import db
 from extensions import init_extensions
 from routes import register_blueprints
 from services.booking_lifecycle import expire_due_bookings
-import os
+from seed import run_seed
 
 
 def create_app(config_name: str = "default") -> Flask:
@@ -46,6 +49,26 @@ def create_app(config_name: str = "default") -> Flask:
         expired_count = expire_due_bookings()
         db.session.commit()
         print(f"Expired {expired_count} booking(s).")
+
+    @app.cli.group("seed")
+    def seed_group() -> None:
+        """Seed the database with safe demo data."""
+
+    @seed_group.command("run")
+    def seed_run_command() -> None:
+        database_backend = db.engine.url.get_backend_name()
+        if database_backend != "sqlite" and os.getenv("ALLOW_PRODUCTION_SEEDING", "false").lower() != "true":
+            raise click.ClickException(
+                "Refusing to seed a production database. Set ALLOW_PRODUCTION_SEEDING=true to confirm."
+            )
+
+        result = run_seed()
+        print(
+            "Seed completed: "
+            f"admin_created={result['admin_created']}, "
+            f"stations_created={result['stations_created']}, "
+            f"stations_updated={result['stations_updated']}"
+        )
 
     return app
 
