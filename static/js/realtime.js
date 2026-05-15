@@ -1,6 +1,19 @@
 (() => {
   const socketUrl = window.EV_CHARGE_SOCKET_URL || window.location.origin;
-  const socket = window.io ? window.io(socketUrl, { transports: ["websocket", "polling"], withCredentials: true }) : null;
+  const socket = window.io
+    ? window.io(socketUrl, {
+        path: "/socket.io",
+        transports: ["websocket", "polling"],
+        upgrade: true,
+        rememberUpgrade: true,
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 10000,
+        randomizationFactor: 0.5,
+        timeout: 20000,
+      })
+    : null;
 
   const dom = {
     walletBalance: document.querySelector("[data-live-wallet-balance]"),
@@ -9,7 +22,7 @@
     notifications: document.querySelector("[data-live-notification-list]"),
   };
 
-  const chartInstances = window.EVChargeCharts || {};
+  const getChartInstances = () => window.EVChargeCharts || {};
 
   const formatCurrency = (value) => {
     const amount = Number(value || 0);
@@ -61,10 +74,18 @@
     document.querySelectorAll(`[data-live-station-slots="${payload.station_id}"]`).forEach((element) => {
       const available = payload.available_slots ?? element.dataset.availableSlots ?? 0;
       const total = payload.total_slots ?? element.dataset.totalSlots ?? 0;
-      element.textContent = `${available} / ${total}`;
+      const hadSlotsSuffix = /\bslots\b/i.test(element.textContent);
+      element.textContent = hadSlotsSuffix ? `${available} / ${total} slots` : `${available} / ${total}`;
       element.dataset.availableSlots = available;
       element.dataset.totalSlots = total;
     });
+  };
+
+  const applyStationBulkUpdate = (payload) => {
+    if (!payload || !Array.isArray(payload.stations)) {
+      return;
+    }
+    payload.stations.forEach((station) => updateStationSlots(station));
   };
 
   const updateWallet = (payload) => {
@@ -89,29 +110,27 @@
   };
 
   const updateAdminCharts = (payload) => {
-    if (!chartInstances.bookingsPerDay || !chartInstances.rechargeTrends || !chartInstances.statusDistribution || !chartInstances.topStations) {
-      return;
-    }
+    const chartInstances = getChartInstances();
 
-    if (Array.isArray(payload.bookings_per_day_labels) && Array.isArray(payload.bookings_per_day_counts)) {
+    if (chartInstances.bookingsPerDay && Array.isArray(payload.bookings_per_day_labels) && Array.isArray(payload.bookings_per_day_counts)) {
       chartInstances.bookingsPerDay.data.labels = payload.bookings_per_day_labels;
       chartInstances.bookingsPerDay.data.datasets[0].data = payload.bookings_per_day_counts;
       chartInstances.bookingsPerDay.update();
     }
 
-    if (Array.isArray(payload.recharge_labels) && Array.isArray(payload.recharge_values)) {
+    if (chartInstances.rechargeTrends && Array.isArray(payload.recharge_labels) && Array.isArray(payload.recharge_values)) {
       chartInstances.rechargeTrends.data.labels = payload.recharge_labels;
       chartInstances.rechargeTrends.data.datasets[0].data = payload.recharge_values;
       chartInstances.rechargeTrends.update();
     }
 
-    if (Array.isArray(payload.status_labels) && Array.isArray(payload.status_counts)) {
+    if (chartInstances.statusDistribution && Array.isArray(payload.status_labels) && Array.isArray(payload.status_counts)) {
       chartInstances.statusDistribution.data.labels = payload.status_labels;
       chartInstances.statusDistribution.data.datasets[0].data = payload.status_counts;
       chartInstances.statusDistribution.update();
     }
 
-    if (Array.isArray(payload.top_stations) && Array.isArray(payload.top_station_counts)) {
+    if (chartInstances.topStations && Array.isArray(payload.top_stations) && Array.isArray(payload.top_station_counts)) {
       chartInstances.topStations.data.labels = payload.top_stations;
       chartInstances.topStations.data.datasets[0].data = payload.top_station_counts;
       chartInstances.topStations.update();
@@ -152,10 +171,19 @@
 
   socket.on("connect", () => {
     document.body.classList.add("socket-connected");
+    socket.emit("sync:request", { reason: "connect" });
   });
 
   socket.on("disconnect", () => {
     document.body.classList.remove("socket-connected");
+  });
+
+  socket.on("connect_error", () => {
+    document.body.classList.remove("socket-connected");
+  });
+
+  socket.io.on("reconnect", () => {
+    socket.emit("sync:request", { reason: "reconnect" });
   });
 
   socket.on("socket:ready", (payload) => {
@@ -171,6 +199,7 @@
   });
 
   socket.on("station:update", updateStationSlots);
+  socket.on("station:bulk_update", applyStationBulkUpdate);
   socket.on("wallet:update", (payload) => {
     updateWallet(payload);
     appendNotification(payload);

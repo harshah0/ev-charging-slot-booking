@@ -1,5 +1,11 @@
 import os
 
+# Eventlet must patch stdlib before importing Flask/socket dependencies.
+if os.getenv("SOCKETIO_ASYNC_MODE", "eventlet").lower() == "eventlet":
+    import eventlet
+
+    eventlet.monkey_patch()
+
 import click
 from flask import Flask
 from flask_login import current_user

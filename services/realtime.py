@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from flask_login import current_user
 from flask_socketio import emit, join_room
+from sqlalchemy import func
 
+from extensions import db
 from extensions import socketio
+from models import ChargingStation
 from services.admin_analytics import build_admin_analytics_snapshot
 from utils.datetime_utils import utc_now
 
@@ -18,10 +21,23 @@ def register_socketio_events() -> None:
 
     @socketio.on("connect")
     def handle_connect(auth=None):
+        _emit_station_bulk_update()
+
         if current_user.is_authenticated:
             join_room(f"user:{current_user.id}")
             if current_user.is_admin():
                 join_room("admins")
+                emit("analytics:update", {**build_admin_analytics_snapshot(), "reason": "connect"})
+
+            emit(
+                "wallet:update",
+                {
+                    "user_id": current_user.id,
+                    "wallet_balance": float(current_user.wallet_balance),
+                    "server_time": utc_now().isoformat(),
+                },
+            )
+
             emit(
                 "socket:ready",
                 {
@@ -33,7 +49,49 @@ def register_socketio_events() -> None:
         else:
             emit("socket:ready", {"server_time": utc_now().isoformat()})
 
+    @socketio.on("sync:request")
+    def handle_sync_request(payload=None):
+        _emit_station_bulk_update()
+        if current_user.is_authenticated:
+            emit(
+                "wallet:update",
+                {
+                    "user_id": current_user.id,
+                    "wallet_balance": float(current_user.wallet_balance),
+                    "server_time": utc_now().isoformat(),
+                },
+            )
+            if current_user.is_admin():
+                emit("analytics:update", {**build_admin_analytics_snapshot(), "reason": "sync"})
+
     _socketio_events_registered = True
+
+
+def _emit_station_bulk_update() -> None:
+    rows = (
+        db.session.query(
+            ChargingStation.id,
+            ChargingStation.available_slots,
+            ChargingStation.total_slots,
+            func.now(),
+        )
+        .order_by(ChargingStation.id.asc())
+        .all()
+    )
+    emit(
+        "station:bulk_update",
+        {
+            "stations": [
+                {
+                    "station_id": int(row[0]),
+                    "available_slots": int(row[1]),
+                    "total_slots": int(row[2]),
+                }
+                for row in rows
+            ],
+            "server_time": utc_now().isoformat(),
+        },
+    )
 
 
 def emit_live_booking_event(*, action: str, booking, station=None, message: str | None = None) -> None:

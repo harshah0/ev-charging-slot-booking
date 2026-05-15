@@ -20,4 +20,8 @@ def init_extensions(app) -> None:
         cors_allowed_origins=app.config.get("SOCKETIO_CORS_ORIGINS", "*"),
         async_mode=app.config.get("SOCKETIO_ASYNC_MODE"),
         message_queue=app.config.get("SOCKETIO_MESSAGE_QUEUE"),
+        ping_interval=app.config.get("SOCKETIO_PING_INTERVAL", 25),
+        ping_timeout=app.config.get("SOCKETIO_PING_TIMEOUT", 60),
+        max_http_buffer_size=app.config.get("SOCKETIO_MAX_HTTP_BUFFER_SIZE", 1000000),
+        manage_session=False,
     )

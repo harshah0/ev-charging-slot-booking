@@ -46,6 +46,14 @@ pytest -x
 pytest -s
 ```
 
+### Run Realtime Smoke Harness
+
+```bash
+# Verifies websocket event flow for:
+# recharge -> booking create -> booking complete -> reconnect + sync:request
+python scripts/realtime_e2e_verify.py
+```
+
 ---
 
 ## Manual Testing Workflow
