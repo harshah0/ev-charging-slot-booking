@@ -41,7 +41,7 @@
       <div class="d-flex justify-content-between align-items-center">
         <div>
           <div class="text-muted small">Wallet Balance</div>
-          <div class="fw-bold">₹{{ "%.2f"|format(current_user.wallet_balance) }}</div>
+          <div class="fw-bold" data-live-wallet-balance>₹{{ "%.2f"|format(current_user.wallet_balance) }}</div>
         </div>
         <a href="{{ url_for('payment.recharge') }}" class="btn btn-dark btn-sm">Recharge</a>
       </div>
@@ -71,7 +71,7 @@
                     <div class="fw-semibold">{{ booking.station.station_name }}</div>
                     <div class="text-muted small">{{ booking.station.city }}, {{ booking.station.state }}</div>
                     <div class="small mt-2">{{ booking.booking_time.strftime('%Y-%m-%d %H:%M UTC') }} · {{ booking.charging_duration }} min</div>
-                    <div class="small mt-1 text-primary fw-semibold">Ends in <span data-countdown-target="{{ booking.expires_at.isoformat() }}">--:--:--</span></div>
+                    <div class="small mt-1 text-primary fw-semibold">Ends in <span data-countdown-target="{{ booking.expires_at.isoformat() }}" data-live-booking-expiry data-booking-id="{{ booking.id }}">--:--:--</span></div>
                   </div>
                   <div class="d-flex gap-2">
                     <a href="{{ url_for('bookings.new_booking', station_id=booking.station.id) }}" class="btn btn-sm btn-outline-secondary">Book again</a>
@@ -117,7 +117,7 @@
                 <div>
                   <div class="fw-semibold">{{ station.station_name }}</div>
                   <div class="text-muted small">{{ station.city }}, {{ station.state }}</div>
-                  <div class="small mt-1">{{ station.available_slots }} / {{ station.total_slots }} slots</div>
+                  <div class="small mt-1" data-live-station-slots="{{ station.id }}" data-available-slots="{{ station.available_slots }}" data-total-slots="{{ station.total_slots }}">{{ station.available_slots }} / {{ station.total_slots }} slots</div>
                 </div>
                 <a href="{{ url_for('bookings.new_booking', station_id=station.id) }}" class="btn btn-sm btn-dark">Book</a>
               </div>

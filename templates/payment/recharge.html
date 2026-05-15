@@ -19,7 +19,7 @@
           <div class="row g-3">
             <div class="col-md-6">
               <div class="small text-muted">Current Balance</div>
-              <div class="h4 fw-bold mb-0">₹{{ "%.2f"|format(current_user.wallet_balance) }}</div>
+              <div class="h4 fw-bold mb-0" data-live-wallet-balance>₹{{ "%.2f"|format(current_user.wallet_balance) }}</div>
             </div>
             <div class="col-md-6">
               <div class="small text-muted">Booking Rate</div>
@@ -88,11 +88,12 @@
   const amountInput = document.getElementById('amount');
   const amountDisplay = document.getElementById('amount-display');
   const newBalanceDisplay = document.getElementById('new-balance-display');
-  const currentBalance = {{ current_user.wallet_balance }};
+  window.EVChargeRechargeState = window.EVChargeRechargeState || {};
+  window.EVChargeRechargeState.currentBalance = {{ current_user.wallet_balance }};
 
   function updateDisplay() {
     const amount = parseFloat(amountInput.value) || 0;
-    const newBalance = currentBalance + amount;
+    const newBalance = window.EVChargeRechargeState.currentBalance + amount;
     
     amountDisplay.textContent = '₹' + amount.toFixed(2);
     newBalanceDisplay.textContent = '₹' + newBalance.toFixed(2);
@@ -100,5 +101,6 @@
 
   amountInput.addEventListener('input', updateDisplay);
   amountInput.addEventListener('change', updateDisplay);
+  window.EVChargeRechargePreview = updateDisplay;
 </script>
 {% endblock %}

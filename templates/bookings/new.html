@@ -20,7 +20,7 @@
           <div class="col-md-6">
             <div class="p-3 bg-light rounded">
               <div class="small text-muted">Available Slots</div>
-              <div class="fw-semibold">{{ station.available_slots }} / {{ station.total_slots }}</div>
+              <div class="fw-semibold" data-live-station-slots="{{ station.id }}" data-available-slots="{{ station.available_slots }}" data-total-slots="{{ station.total_slots }}">{{ station.available_slots }} / {{ station.total_slots }}</div>
             </div>
           </div>
           <div class="col-md-6">
@@ -32,7 +32,7 @@
           <div class="col-md-6">
             <div class="p-3 bg-light rounded">
               <div class="small text-muted">Wallet Balance</div>
-              <div class="fw-semibold">₹{{ "%.2f"|format(current_user.wallet_balance) }}</div>
+              <div class="fw-semibold" data-live-wallet-balance>₹{{ "%.2f"|format(current_user.wallet_balance) }}</div>
             </div>
           </div>
           <div class="col-12">
@@ -73,7 +73,7 @@
             </div>
             <div class="d-flex justify-content-between mb-2">
               <span class="text-muted">Wallet Balance</span>
-              <span id="balance-display">₹{{ "%.2f"|format(current_user.wallet_balance) }}</span>
+              <span id="balance-display" data-live-wallet-balance>₹{{ "%.2f"|format(current_user.wallet_balance) }}</span>
             </div>
             <div class="d-flex justify-content-between">
               <span class="text-muted">Balance After Booking</span>
@@ -96,13 +96,14 @@
   const durationDisplay = document.getElementById('duration-display');
   const costDisplay = document.getElementById('cost-display');
   const balanceAfterDisplay = document.getElementById('balance-after-display');
-  const currentBalance = {{ current_user.wallet_balance }};
+  window.EVChargeBookingState = window.EVChargeBookingState || {};
+  window.EVChargeBookingState.currentBalance = {{ current_user.wallet_balance }};
   const baseRate = 0.50;
 
   function updateCostDisplay() {
     const duration = parseInt(durationInput.value) || 0;
     const cost = duration * baseRate;
-    const balanceAfter = currentBalance - cost;
+    const balanceAfter = window.EVChargeBookingState.currentBalance - cost;
     
     durationDisplay.textContent = duration + ' minute' + (duration !== 1 ? 's' : '');
     costDisplay.textContent = '₹' + cost.toFixed(2);
@@ -117,5 +118,6 @@
 
   durationInput.addEventListener('input', updateCostDisplay);
   durationInput.addEventListener('change', updateCostDisplay);
+  window.EVChargeBookingPreview = updateCostDisplay;
 </script>
 {% endblock %}

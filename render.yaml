@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: ev-charging-slot-booking
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -k eventlet -w 1 -b 0.0.0.0:$PORT app:app --log-file -
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: USE_WHITENOISE
+        value: "true"
+      - key: SOCKETIO_ASYNC_MODE
+        value: eventlet
+      - key: ALLOW_PRODUCTION_SEEDING
+        value: "false"

@@ -5,11 +5,13 @@ from flask import Flask
 from flask_login import current_user
 
 from config import config_by_name
-from extensions import db
+from extensions import db, socketio
 from extensions import init_extensions
 from routes import register_blueprints
 from services.booking_lifecycle import expire_due_bookings
 from seed import run_seed
+from services.realtime import register_socketio_events
+from services.realtime import emit_live_booking_event
 
 
 def create_app(config_name: str = "default") -> Flask:
@@ -39,16 +41,18 @@ def create_app(config_name: str = "default") -> Flask:
         if not current_user.is_authenticated:
             return None
 
-        expired_count = expire_due_bookings()
-        if expired_count > 0:
+        expired_bookings = expire_due_bookings()
+        if expired_bookings:
             db.session.commit()
+            for booking in expired_bookings:
+                emit_live_booking_event(action="expired", booking=booking, message="Booking expired and slot released.")
         return None
 
     @app.cli.command("sweep-bookings")
     def sweep_bookings_command() -> None:
-        expired_count = expire_due_bookings()
+        expired_bookings = expire_due_bookings()
         db.session.commit()
-        print(f"Expired {expired_count} booking(s).")
+        print(f"Expired {len(expired_bookings)} booking(s).")
 
     @app.cli.group("seed")
     def seed_group() -> None:
@@ -69,8 +73,8 @@ def create_app(config_name: str = "default") -> Flask:
             f"stations_created={result['stations_created']}, "
             f"stations_updated={result['stations_updated']}"
         )
-    with app.app_context():
-        run_seed()
+
+    register_socketio_events()
     return app
 
 
@@ -78,4 +82,4 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    socketio.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=app.debug)

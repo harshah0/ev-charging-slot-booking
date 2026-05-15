@@ -21,7 +21,7 @@
     <div class="card shadow-sm border-0 h-100">
       <div class="card-body">
         <div class="text-muted small mb-1">Total Users</div>
-        <div class="display-6 fw-bold mb-0">{{ total_users }}</div>
+        <div class="display-6 fw-bold mb-0" data-live-metric="total_users">{{ total_users }}</div>
       </div>
     </div>
   </div>
@@ -29,7 +29,7 @@
     <div class="card shadow-sm border-0 h-100">
       <div class="card-body">
         <div class="text-muted small mb-1">Total Stations</div>
-        <div class="display-6 fw-bold mb-0">{{ total_stations }}</div>
+        <div class="display-6 fw-bold mb-0" data-live-metric="total_stations">{{ total_stations }}</div>
       </div>
     </div>
   </div>
@@ -37,7 +37,7 @@
     <div class="card shadow-sm border-0 h-100">
       <div class="card-body">
         <div class="text-muted small mb-1">Total Bookings</div>
-        <div class="display-6 fw-bold mb-0">{{ total_bookings }}</div>
+        <div class="display-6 fw-bold mb-0" data-live-metric="total_bookings">{{ total_bookings }}</div>
       </div>
     </div>
   </div>
@@ -45,7 +45,7 @@
     <div class="card shadow-sm border-0 h-100">
       <div class="card-body">
         <div class="text-muted small mb-1">Active Bookings</div>
-        <div class="display-6 fw-bold mb-0">{{ active_bookings }}</div>
+        <div class="display-6 fw-bold mb-0" data-live-metric="active_bookings">{{ active_bookings }}</div>
       </div>
     </div>
   </div>
@@ -59,30 +59,30 @@
         <div class="vstack gap-3">
           <div class="d-flex justify-content-between">
             <span class="text-muted">Slot utilization</span>
-            <span class="fw-semibold">{{ slot_utilization }}%</span>
+            <span class="fw-semibold" data-live-metric="slot_utilization">{{ slot_utilization }}%</span>
           </div>
           <div class="progress" style="height: 0.75rem;">
-            <div class="progress-bar bg-dark" role="progressbar" style="width: {{ slot_utilization }}%;" aria-valuenow="{{ slot_utilization }}" aria-valuemin="0" aria-valuemax="100"></div>
+            <div class="progress-bar bg-dark" role="progressbar" style="width: {{ slot_utilization }}%;" aria-valuenow="{{ slot_utilization }}" aria-valuemin="0" aria-valuemax="100" data-live-slot-utilization-bar></div>
           </div>
           <div class="d-flex justify-content-between">
             <span class="text-muted">Occupied slots</span>
-            <span class="fw-semibold">{{ occupied_slots }}</span>
+            <span class="fw-semibold" data-live-metric="occupied_slots">{{ occupied_slots }}</span>
           </div>
           <div class="d-flex justify-content-between">
             <span class="text-muted">Available slots</span>
-            <span class="fw-semibold">{{ available_slots }}</span>
+            <span class="fw-semibold" data-live-metric="available_slots">{{ available_slots }}</span>
           </div>
           <div class="d-flex justify-content-between">
             <span class="text-muted">Total slots</span>
-            <span class="fw-semibold">{{ total_slots }}</span>
+            <span class="fw-semibold" data-live-metric="total_slots">{{ total_slots }}</span>
           </div>
           <div class="mt-3 pt-3 border-top">
             <div class="small text-muted mb-2">Lifecycle distribution</div>
             <div class="d-flex flex-wrap gap-2">
-              <span class="badge text-bg-primary">Active {{ active_bookings }}</span>
-              <span class="badge text-bg-success">Completed {{ completed_bookings }}</span>
-              <span class="badge text-bg-warning">Expired {{ expired_bookings }}</span>
-              <span class="badge text-bg-secondary">Cancelled {{ cancelled_bookings }}</span>
+              <span class="badge text-bg-primary">Active <span data-live-metric="active_bookings">{{ active_bookings }}</span></span>
+              <span class="badge text-bg-success">Completed <span data-live-metric="completed_bookings">{{ completed_bookings }}</span></span>
+              <span class="badge text-bg-warning">Expired <span data-live-metric="expired_bookings">{{ expired_bookings }}</span></span>
+              <span class="badge text-bg-secondary">Cancelled <span data-live-metric="cancelled_bookings">{{ cancelled_bookings }}</span></span>
             </div>
           </div>
         </div>
@@ -184,7 +184,20 @@
       </div>
       <div class="d-flex gap-3 align-items-center">
         <div class="text-muted small">Total revenue</div>
-        <div class="fw-bold">₹{{ "%.2f"|format(total_wallet_revenue) }}</div>
+        <div class="fw-bold" data-live-metric="total_wallet_revenue">₹{{ "%.2f"|format(total_wallet_revenue) }}</div>
+      </div>
+    </div>
+
+    <div class="alert alert-info border-0 mb-3">
+      <div class="d-flex justify-content-between align-items-center gap-3">
+        <div>
+          <div class="fw-semibold">Live updates</div>
+          <div class="small text-body-secondary">Realtime changes from bookings, wallets, and analytics will appear here.</div>
+        </div>
+        <span class="badge text-bg-primary">Connected</span>
+      </div>
+      <div class="mt-3 vstack gap-2" data-live-notification-list>
+        <div class="small text-body-secondary">Waiting for the first live event.</div>
       </div>
     </div>
 
@@ -251,10 +264,12 @@
     const topStations = {{ top_stations|tojson }};
     const topStationCounts = {{ top_station_counts|tojson }};
 
+    window.EVChargeCharts = window.EVChargeCharts || {};
+
     function renderCharts(){
       // Bookings line
       const ctxB = document.getElementById('chartBookings').getContext('2d');
-      new Chart(ctxB, {
+      window.EVChargeCharts.bookingsPerDay = new Chart(ctxB, {
         type: 'line',
         data: {labels: bookingsLabels, datasets: [{label: 'Bookings', data: bookingsData, borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.08)', fill:true, tension:0.3} ]},
         options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}
@@ -263,7 +278,7 @@
 
       // Recharge line
       const ctxR = document.getElementById('chartRecharge').getContext('2d');
-      new Chart(ctxR, {
+      window.EVChargeCharts.rechargeTrends = new Chart(ctxR, {
         type:'line',
         data:{labels:rechargeLabels, datasets:[{label:'Recharges', data:rechargeData, borderColor:'#198754', backgroundColor:'rgba(25,135,84,0.08)', fill:true, tension:0.3}]},
         options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}
@@ -272,7 +287,7 @@
 
       // Status doughnut
       const ctxS = document.getElementById('chartStatus').getContext('2d');
-      new Chart(ctxS, {
+      window.EVChargeCharts.statusDistribution = new Chart(ctxS, {
         type:'doughnut',
         data:{labels:statusLabels, datasets:[{data:statusData, backgroundColor:['#0d6efd','#198754','#ffc107','#6c757d']}]},
         options:{responsive:true, maintainAspectRatio:false}
@@ -282,7 +297,7 @@
       // Top stations bar
       if(topStations.length){
         const ctxT = document.getElementById('chartStations').getContext('2d');
-        new Chart(ctxT, {
+        window.EVChargeCharts.topStations = new Chart(ctxT, {
           type:'bar',
           data:{labels:topStations, datasets:[{label:'Bookings', data:topStationCounts, backgroundColor:'#6f42c1'}]},
           options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{maxRotation:45,minRotation:0}}}}

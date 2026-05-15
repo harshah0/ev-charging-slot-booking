@@ -16,6 +16,7 @@ from services.booking_lifecycle import (
     complete_booking as complete_booking_lifecycle,
     sync_booking_lifecycle,
 )
+from services.realtime import emit_live_booking_event
 from utils.booking_validation import validate_booking_payload
 from utils.csrf import validate_csrf_token
 from utils.datetime_utils import utc_now
@@ -122,6 +123,13 @@ def create_booking():
         db.session.add(transaction)
         db.session.commit()
 
+        emit_live_booking_event(
+            action="created",
+            booking=booking,
+            station=station,
+            message=f"New booking created for {station.station_name}.",
+        )
+
         flash(
             f"Your booking was created successfully. Charged: {format_currency(booking_cost)}. Remaining balance: {format_currency(Decimal(current_user.wallet_balance))}",
             "success",
@@ -165,6 +173,12 @@ def complete_booking(booking_id: int):
         return redirect(url_for("bookings.history"))
 
     db.session.commit()
+    emit_live_booking_event(
+        action="completed",
+        booking=booking,
+        station=booking.station,
+        message="Booking completed and slot released.",
+    )
     flash("Booking marked as completed.", "success")
     return redirect(url_for("bookings.history"))
 
@@ -205,5 +219,11 @@ def cancel_booking(booking_id: int):
         return redirect(url_for("bookings.history"))
 
     db.session.commit()
+    emit_live_booking_event(
+        action="cancelled",
+        booking=booking,
+        station=booking.station,
+        message="Booking cancelled and slot released.",
+    )
     flash("Booking cancelled successfully.", "info")
     return redirect(url_for("bookings.history"))

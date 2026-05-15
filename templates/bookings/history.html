@@ -38,7 +38,7 @@
               <td>{{ booking.charging_duration }} min</td>
               <td>
                 {% if lifecycle_state == 'active' %}
-                  <div class="fw-semibold text-primary" data-countdown-target="{{ booking.expires_at.isoformat() }}">--:--:--</div>
+                  <div class="fw-semibold text-primary" data-countdown-target="{{ booking.expires_at.isoformat() }}" data-live-booking-expiry data-booking-id="{{ booking.id }}">--:--:--</div>
                   <div class="small text-muted">until auto-expiry</div>
                 {% elif lifecycle_state == 'completed' and booking.completed_at %}
                   <div class="small text-muted">Completed at</div>

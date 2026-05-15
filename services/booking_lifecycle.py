@@ -111,7 +111,7 @@ def sync_booking_lifecycle(booking: Booking, reference_time: datetime | None = N
     return expire_booking(booking, reference_time)
 
 
-def expire_due_bookings(reference_time: datetime | None = None) -> int:
+def expire_due_bookings(reference_time: datetime | None = None) -> list[Booking]:
     now = ensure_utc_datetime(reference_time) or utc_now()
     due_bookings = (
         Booking.query
@@ -125,9 +125,9 @@ def expire_due_bookings(reference_time: datetime | None = None) -> int:
         .all()
     )
 
-    expired_count = 0
+    expired_bookings: list[Booking] = []
     for booking in due_bookings:
         if expire_booking(booking, now):
-            expired_count += 1
+            expired_bookings.append(booking)
 
-    return expired_count
+    return expired_bookings

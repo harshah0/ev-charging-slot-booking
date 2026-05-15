@@ -9,6 +9,7 @@ from flask_login import current_user, login_required
 from extensions import db
 from models import Transaction
 from models.transaction import TransactionStatus, TransactionType
+from services.realtime import emit_wallet_update
 from utils.csrf import validate_csrf_token
 from utils.payment import format_currency
 
@@ -83,6 +84,12 @@ def recharge_post():
 
         db.session.add(transaction)
         db.session.commit()
+
+        emit_wallet_update(
+            user=current_user,
+            transaction=transaction,
+            message=f"Wallet recharged with {format_currency(amount)}.",
+        )
 
         flash(
             f"Wallet recharged successfully with {format_currency(amount)}. New balance: {format_currency(Decimal(current_user.wallet_balance))}",

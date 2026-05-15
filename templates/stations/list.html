@@ -36,7 +36,7 @@
               <td>{{ station.station_name }}</td>
               <td>{{ station.address }}, {{ station.city }}, {{ station.state }}</td>
               <td>{{ station.latitude }}, {{ station.longitude }}</td>
-              <td>{{ station.available_slots }} / {{ station.total_slots }}</td>
+              <td data-live-station-slots="{{ station.id }}" data-available-slots="{{ station.available_slots }}" data-total-slots="{{ station.total_slots }}">{{ station.available_slots }} / {{ station.total_slots }}</td>
               <td>{{ station.charging_type }}</td>
               <td class="text-end">
                 <div class="d-flex gap-2 justify-content-end">

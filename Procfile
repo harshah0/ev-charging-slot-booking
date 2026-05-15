@@ -1,1 +1,1 @@
-web: gunicorn -w 4 -k gthread -b 0.0.0.0:$PORT app:app --log-file -
+web: gunicorn -k eventlet -w 1 -b 0.0.0.0:$PORT app:app --log-file -
