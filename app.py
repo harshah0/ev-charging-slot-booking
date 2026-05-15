@@ -69,7 +69,8 @@ def create_app(config_name: str = "default") -> Flask:
             f"stations_created={result['stations_created']}, "
             f"stations_updated={result['stations_updated']}"
         )
-
+    with app.app_context():
+        run_seed()
     return app
 
 
