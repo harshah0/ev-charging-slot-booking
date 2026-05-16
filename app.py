@@ -20,6 +20,17 @@ from services.realtime import register_socketio_events
 from services.realtime import emit_live_booking_event
 
 
+def _log_openchargemap_status(app: Flask) -> None:
+    """Log safe OpenChargeMap startup status without leaking secrets."""
+    api_key_present = bool(app.config.get("OPENCHARGEMAP_API_KEY"))
+    app.logger.info(
+        "OpenChargeMap integration %s (api_key=%s, endpoint=%s)",
+        "enabled" if app.config.get("OPENCHARGEMAP_ENABLED", True) else "disabled",
+        "configured" if api_key_present else "missing",
+        app.config.get("OPENCHARGEMAP_ENDPOINT"),
+    )
+
+
 def create_app(config_name: str = "default") -> Flask:
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(config_by_name[config_name])
@@ -81,6 +92,7 @@ def create_app(config_name: str = "default") -> Flask:
         )
 
     register_socketio_events()
+    _log_openchargemap_status(app)
     return app
 
 

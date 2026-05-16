@@ -14,6 +14,11 @@ from utils.datetime_utils import utc_now
 
 _socketio_events_registered = False
 
+# Debounce/throttle state for admin analytics broadcasts
+_LAST_ADMIN_ANALYTICS_EMIT: "datetime | None" = None
+_ANALYTICS_DEBOUNCE_SECONDS = 0.5
+_ANALYTICS_PENDING: dict | None = None
+
 
 def _log_socket(message: str, **details) -> None:
     try:
@@ -37,12 +42,13 @@ def register_socketio_events() -> None:
             auth_present=bool(auth),
         )
         _emit_station_bulk_update()
-
         if current_user.is_authenticated:
             join_room(f"user:{current_user.id}")
             if current_user.is_admin():
                 join_room("admins")
-                emit("analytics:update", {**build_admin_analytics_snapshot(), "reason": "connect"})
+                # Do not emit analytics snapshot on connect to avoid duplicate
+                # broadcasts during reconnect/connect storms. Admin clients will
+                # request a sync via `sync:request` on connect.
 
             emit(
                 "wallet:update",
@@ -90,8 +96,10 @@ def register_socketio_events() -> None:
                     "server_time": utc_now().isoformat(),
                 },
             )
-            if current_user.is_admin():
-                emit("analytics:update", {**build_admin_analytics_snapshot(), "reason": "sync"})
+            # Do not automatically emit analytics snapshot on sync requests.
+            # This prevents rapid analytics echoes during reconnects/page reloads.
+            # Admin clients should only receive analytics updates triggered by
+            # actual business events (bookings/recharges).
 
     _socketio_events_registered = True
 
@@ -187,16 +195,61 @@ def emit_wallet_update(*, user, transaction, message: str | None = None) -> None
     )
     socketio.emit("wallet:update", payload, room=f"user:{user.id}")
     socketio.emit("notification:new", payload, room=f"user:{user.id}")
-    emit_admin_analytics_snapshot(reason="wallet")
+    # Wallet updates are frequent and not considered primary analytics triggers.
+    # Do not emit admin analytics snapshot here to avoid noisy dashboard updates.
 
 
 def emit_admin_analytics_snapshot(*, reason: str) -> None:
+    global _ANALYTICS_PENDING, _LAST_ADMIN_ANALYTICS_EMIT
+
     snapshot = build_admin_analytics_snapshot()
     snapshot["reason"] = reason
     _log_socket(
-        "emit analytics:update",
+        "queue analytics:update",
         reason=reason,
         total_bookings=snapshot.get("total_bookings"),
         active_bookings=snapshot.get("active_bookings"),
     )
-    socketio.emit("analytics:update", snapshot, room="admins")
+
+    # Update latest pending snapshot
+    _ANALYTICS_PENDING = snapshot
+
+    # If last emit was recent, debounce and coalesce snapshots into a single emit
+    now = utc_now()
+    if _LAST_ADMIN_ANALYTICS_EMIT and (now - _LAST_ADMIN_ANALYTICS_EMIT).total_seconds() < _ANALYTICS_DEBOUNCE_SECONDS:
+        # Schedule a background flush after the remaining debounce window
+        try:
+            remaining = _ANALYTICS_DEBOUNCE_SECONDS - (now - _LAST_ADMIN_ANALYTICS_EMIT).total_seconds()
+            socketio.start_background_task(_flush_pending_admin_snapshot, remaining)
+        except Exception:
+            # Fallback: attempt immediate emit if background task scheduling fails
+            pass
+        return
+
+    # Otherwise emit immediately and record timestamp
+    try:
+        socketio.emit("analytics:update", snapshot, room="admins")
+        _LAST_ADMIN_ANALYTICS_EMIT = utc_now()
+        _ANALYTICS_PENDING = None
+        _log_socket("emit analytics:update", reason=reason)
+    except Exception:
+        _log_socket("emit analytics:update failed", reason=reason)
+
+
+def _flush_pending_admin_snapshot(delay_seconds: float) -> None:
+    # Sleep for the specified debounce delay, then emit the latest pending snapshot
+    try:
+        if delay_seconds and delay_seconds > 0:
+            import time as _time
+
+            _time.sleep(float(delay_seconds))
+        global _ANALYTICS_PENDING, _LAST_ADMIN_ANALYTICS_EMIT
+        if not _ANALYTICS_PENDING:
+            return
+        snap = _ANALYTICS_PENDING
+        socketio.emit("analytics:update", snap, room="admins")
+        _LAST_ADMIN_ANALYTICS_EMIT = utc_now()
+        _log_socket("emit analytics:update (deferred)", reason=snap.get("reason"))
+        _ANALYTICS_PENDING = None
+    except Exception:
+        _log_socket("flush_pending_admin_snapshot failed")

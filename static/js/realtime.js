@@ -1,4 +1,5 @@
 (() => {
+  const MAX_ANALYTICS_POINTS = 30;
   const socketUrl = window.EV_CHARGE_SOCKET_URL || window.location.origin;
   const socket = window.io
     ? window.io(socketUrl, {
@@ -15,9 +16,14 @@
       })
     : null;
 
+  const ANALYTICS_THROTTLE_MS = 250; // Minimum ms between chart updates
   const state = {
     pendingAnalytics: null,
+    pendingAnalyticsFrame: null,
     reconnectSyncRequested: false,
+    listenersBound: false,
+    lastAnalyticsAppliedAt: 0,
+    analyticsThrottleTimer: null,
   };
 
   const dom = {
@@ -28,6 +34,66 @@
   };
 
   const getChartInstances = () => window.EVChargeCharts || {};
+
+  const clampAnalyticsSeries = (labels, values) => {
+    return {
+      labels: Array.isArray(labels) ? labels.slice(-MAX_ANALYTICS_POINTS) : [],
+      values: Array.isArray(values) ? values.slice(-MAX_ANALYTICS_POINTS) : [],
+    };
+  };
+
+  const formatAnalyticsAge = (timestampMs) => {
+    if (!Number.isFinite(timestampMs) || timestampMs <= 0) {
+      return "waiting for live analytics";
+    }
+
+    const ageSeconds = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
+    if (ageSeconds < 10) {
+      return "updated just now";
+    }
+    if (ageSeconds < 60) {
+      return `updated ${ageSeconds}s ago`;
+    }
+
+    const ageMinutes = Math.floor(ageSeconds / 60);
+    if (ageMinutes < 60) {
+      return `updated ${ageMinutes}m ago`;
+    }
+
+    const ageHours = Math.floor(ageMinutes / 60);
+    if (ageHours < 24) {
+      return `updated ${ageHours}h ago`;
+    }
+
+    const ageDays = Math.floor(ageHours / 24);
+    return `updated ${ageDays}d ago`;
+  };
+
+  const renderAnalyticsUpdatedAt = (timestampMs) => {
+    const analyticsUpdatedAt = document.getElementById("analytics-last-updated");
+    if (!analyticsUpdatedAt) {
+      return;
+    }
+
+    analyticsUpdatedAt.dataset.updatedAt = Number.isFinite(timestampMs) ? String(timestampMs) : "";
+    analyticsUpdatedAt.textContent = formatAnalyticsAge(timestampMs);
+  };
+
+  const startAnalyticsAgeTicker = () => {
+    const analyticsUpdatedAt = document.getElementById("analytics-last-updated");
+    if (!analyticsUpdatedAt) {
+      return;
+    }
+
+    if (window.EVChargeAnalyticsAgeTicker) {
+      return;
+    }
+
+    window.EVChargeAnalyticsAgeTicker = window.setInterval(() => {
+      const timestampMs = Number(analyticsUpdatedAt.dataset.updatedAt || 0);
+      analyticsUpdatedAt.textContent = formatAnalyticsAge(timestampMs);
+    }, 1000);
+  };
 
   const debugRealtime = (eventName, payload) => {
     try {
@@ -59,11 +125,51 @@
   window.EVChargeRealtime = window.EVChargeRealtime || {};
   window.EVChargeRealtime.requestSync = requestSync;
   window.EVChargeRealtime.flushPendingState = () => {
-    if (state.pendingAnalytics) {
-      debugRealtime("apply pending analytics:update", state.pendingAnalytics);
-      updateAdminMetrics(state.pendingAnalytics);
-      updateAdminCharts(state.pendingAnalytics);
+    flushPendingAnalytics();
+  };
+
+  const flushPendingAnalytics = () => {
+    if (!state.pendingAnalytics) {
+      return;
     }
+
+    const payload = state.pendingAnalytics;
+    state.pendingAnalytics = null;
+    debugRealtime("apply pending analytics:update", payload);
+    updateAdminMetrics(payload);
+    // Throttle chart updates to avoid overwhelming Chart.js when events flood in.
+    const now = Date.now();
+    const since = now - (state.lastAnalyticsAppliedAt || 0);
+    const apply = () => {
+      state.lastAnalyticsAppliedAt = Date.now();
+      updateAdminCharts(payload);
+      if (state.analyticsThrottleTimer) {
+        clearTimeout(state.analyticsThrottleTimer);
+        state.analyticsThrottleTimer = null;
+      }
+    };
+
+    if (since >= ANALYTICS_THROTTLE_MS) {
+      apply();
+    } else {
+      // Schedule the update after the remaining throttle window
+      if (state.analyticsThrottleTimer) {
+        clearTimeout(state.analyticsThrottleTimer);
+      }
+      state.analyticsThrottleTimer = setTimeout(apply, ANALYTICS_THROTTLE_MS - since);
+    }
+  };
+
+  const scheduleAnalyticsFlush = () => {
+    if (state.pendingAnalyticsFrame !== null) {
+      return;
+    }
+
+    const schedule = window.requestAnimationFrame || ((callback) => window.setTimeout(callback, 16));
+    state.pendingAnalyticsFrame = schedule(() => {
+      state.pendingAnalyticsFrame = null;
+      flushPendingAnalytics();
+    });
   };
 
   const formatCurrency = (value) => {
@@ -181,6 +287,7 @@
     if (!chartInstances.bookingsPerDay || !chartInstances.rechargeTrends || !chartInstances.statusDistribution || !chartInstances.topStations) {
       state.pendingAnalytics = payload;
       debugRealtime("queue analytics:update until charts ready", payload);
+      scheduleAnalyticsFlush();
       return;
     }
 
@@ -188,27 +295,53 @@
     broadcastRealtimeEvent("evcharge:analytics-update", payload);
 
     if (chartInstances.bookingsPerDay && Array.isArray(payload.bookings_per_day_labels) && Array.isArray(payload.bookings_per_day_counts)) {
-      chartInstances.bookingsPerDay.data.labels = payload.bookings_per_day_labels;
-      chartInstances.bookingsPerDay.data.datasets[0].data = payload.bookings_per_day_counts;
-      chartInstances.bookingsPerDay.update();
+      const series = clampAnalyticsSeries(payload.bookings_per_day_labels, payload.bookings_per_day_counts);
+      // Replace labels and datasets atomically to avoid append/merge growth
+      const existing = chartInstances.bookingsPerDay.data.datasets && chartInstances.bookingsPerDay.data.datasets[0] ? chartInstances.bookingsPerDay.data.datasets[0] : {};
+      chartInstances.bookingsPerDay.data.labels = series.labels;
+      chartInstances.bookingsPerDay.data.datasets = [{
+        ...existing,
+        data: series.values,
+      }];
+      chartInstances.bookingsPerDay.update("none");
     }
 
     if (chartInstances.rechargeTrends && Array.isArray(payload.recharge_labels) && Array.isArray(payload.recharge_values)) {
-      chartInstances.rechargeTrends.data.labels = payload.recharge_labels;
-      chartInstances.rechargeTrends.data.datasets[0].data = payload.recharge_values;
-      chartInstances.rechargeTrends.update();
+      const series = clampAnalyticsSeries(payload.recharge_labels, payload.recharge_values);
+      const existing = chartInstances.rechargeTrends.data.datasets && chartInstances.rechargeTrends.data.datasets[0] ? chartInstances.rechargeTrends.data.datasets[0] : {};
+      chartInstances.rechargeTrends.data.labels = series.labels;
+      chartInstances.rechargeTrends.data.datasets = [{
+        ...existing,
+        data: series.values,
+      }];
+      chartInstances.rechargeTrends.update("none");
     }
 
     if (chartInstances.statusDistribution && Array.isArray(payload.status_labels) && Array.isArray(payload.status_counts)) {
-      chartInstances.statusDistribution.data.labels = payload.status_labels;
-      chartInstances.statusDistribution.data.datasets[0].data = payload.status_counts;
-      chartInstances.statusDistribution.update();
+      const series = clampAnalyticsSeries(payload.status_labels, payload.status_counts);
+      const existing = chartInstances.statusDistribution.data.datasets && chartInstances.statusDistribution.data.datasets[0] ? chartInstances.statusDistribution.data.datasets[0] : {};
+      chartInstances.statusDistribution.data.labels = series.labels;
+      chartInstances.statusDistribution.data.datasets = [{
+        ...existing,
+        data: series.values,
+      }];
+      chartInstances.statusDistribution.update("none");
     }
 
     if (chartInstances.topStations && Array.isArray(payload.top_stations) && Array.isArray(payload.top_station_counts)) {
-      chartInstances.topStations.data.labels = payload.top_stations;
-      chartInstances.topStations.data.datasets[0].data = payload.top_station_counts;
-      chartInstances.topStations.update();
+      const series = clampAnalyticsSeries(payload.top_stations, payload.top_station_counts);
+      const existing = chartInstances.topStations.data.datasets && chartInstances.topStations.data.datasets[0] ? chartInstances.topStations.data.datasets[0] : {};
+      chartInstances.topStations.data.labels = series.labels;
+      chartInstances.topStations.data.datasets = [{
+        ...existing,
+        data: series.values,
+      }];
+      chartInstances.topStations.update("none");
+
+      const topStationsEmpty = document.getElementById("top-stations-empty");
+      if (topStationsEmpty) {
+        topStationsEmpty.style.display = series.labels.length ? "none" : "block";
+      }
     }
   };
 
@@ -235,6 +368,10 @@
       utilizationBar.style.width = `${Number(payload.slot_utilization || 0).toFixed(1)}%`;
       utilizationBar.setAttribute("aria-valuenow", String(payload.slot_utilization || 0));
     }
+
+    const timestampValue = payload.server_time ? new Date(payload.server_time) : new Date();
+    const timestampMs = timestampValue instanceof Date && !Number.isNaN(timestampValue.getTime()) ? timestampValue.getTime() : Date.now();
+    renderAnalyticsUpdatedAt(timestampMs);
   };
 
   const updateBookingCountdowns = (payload) => {
@@ -252,73 +389,84 @@
     return;
   }
 
-  socket.on("connect", () => {
+  startAnalyticsAgeTicker();
+
+  const bindSocketListeners = () => {
+    if (state.listenersBound) {
+      return;
+    }
+    state.listenersBound = true;
+
+    socket.on("connect", () => {
     debugRealtime("connect", { id: socket.id, transport: socket.io.engine?.transport?.name });
     document.body.classList.add("socket-connected");
     requestSync("connect");
-  });
+    });
 
-  socket.on("disconnect", () => {
+    socket.on("disconnect", () => {
     debugRealtime("disconnect", { id: socket.id });
     document.body.classList.remove("socket-connected");
-  });
+    });
 
-  socket.on("connect_error", (error) => {
+    socket.on("connect_error", (error) => {
     debugRealtime("connect_error", { message: error?.message, description: error?.description });
     document.body.classList.remove("socket-connected");
-  });
+    });
 
-  socket.io.on("reconnect_attempt", (attempt) => {
+    socket.io.on("reconnect_attempt", (attempt) => {
     debugRealtime("reconnect_attempt", { attempt });
-  });
+    });
 
-  socket.io.on("reconnect_error", (error) => {
+    socket.io.on("reconnect_error", (error) => {
     debugRealtime("reconnect_error", { message: error?.message });
-  });
+    });
 
-  socket.io.on("reconnect_failed", () => {
+    socket.io.on("reconnect_failed", () => {
     debugRealtime("reconnect_failed");
-  });
+    });
 
-  socket.io.on("reconnect", (attempt) => {
+    socket.io.on("reconnect", (attempt) => {
     debugRealtime("reconnect", { attempt });
     requestSync("reconnect");
-  });
+    });
 
-  socket.on("socket:ready", (payload) => {
+    socket.on("socket:ready", (payload) => {
     debugRealtime("socket:ready", payload);
     if (payload?.server_time) {
       document.documentElement.dataset.serverTime = payload.server_time;
     }
-  });
+    });
 
-  socket.on("booking:update", (payload) => {
+    socket.on("booking:update", (payload) => {
     debugRealtime("receive booking:update", payload);
     updateStationSlots(payload);
     updateBookingCountdowns(payload);
     appendNotification(payload);
     broadcastRealtimeEvent("evcharge:booking-update", payload);
-  });
+    });
 
-  socket.on("station:update", (payload) => {
+    socket.on("station:update", (payload) => {
     debugRealtime("receive station:update", payload);
     updateStationSlots(payload);
     broadcastRealtimeEvent("evcharge:station-update", payload);
-  });
-  socket.on("station:bulk_update", applyStationBulkUpdate);
-  socket.on("wallet:update", (payload) => {
+    });
+    socket.on("station:bulk_update", applyStationBulkUpdate);
+    socket.on("wallet:update", (payload) => {
     debugRealtime("receive wallet:update", payload);
     updateWallet(payload);
     appendNotification(payload);
-  });
-  socket.on("analytics:update", (payload) => {
+    });
+    socket.on("analytics:update", (payload) => {
     debugRealtime("receive analytics:update", payload);
-    updateAdminMetrics(payload);
-    updateAdminCharts(payload);
+    state.pendingAnalytics = payload;
+    scheduleAnalyticsFlush();
     appendNotification(payload);
-  });
-  socket.on("notification:new", (payload) => {
+    });
+    socket.on("notification:new", (payload) => {
     debugRealtime("receive notification:new", payload);
     appendNotification(payload);
-  });
+    });
+  };
+
+  bindSocketListeners();
 })();

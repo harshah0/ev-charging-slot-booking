@@ -163,7 +163,10 @@
         <div class="card-body p-3">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <h2 class="h6 fw-bold mb-0">Nearest Stations</h2>
-            <span class="badge text-bg-secondary" id="nearby-count">0</span>
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge text-bg-light border" id="external-fetch-state">Idle</span>
+              <span class="badge text-bg-secondary" id="nearby-count">0</span>
+            </div>
           </div>
           <div id="nearby-list" class="nearby-list vstack gap-2">
             <div class="text-muted small">Enable location to see nearest stations.</div>
@@ -221,6 +224,7 @@
     const geoStatusEl = document.getElementById("geo-status");
     const nearMeToggle = document.getElementById("near-me-toggle");
     const radiusFilter = document.getElementById("radius-filter");
+    const externalFetchStateEl = document.getElementById("external-fetch-state");
 
     const haversineKm = (lat1, lon1, lat2, lon2) => {
       const toRad = (value) => (value * Math.PI) / 180;
@@ -235,6 +239,33 @@
     const setGeoStatus = (message, level = "secondary") => {
       geoStatusEl.className = `alert alert-${level} mb-0 py-2 small`;
       geoStatusEl.textContent = message;
+    };
+
+    const setExternalFetchState = (stateName) => {
+      if (!externalFetchStateEl) {
+        return;
+      }
+
+      if (stateName === "loading") {
+        externalFetchStateEl.className = "badge text-bg-info";
+        externalFetchStateEl.textContent = "Fetching public";
+        return;
+      }
+
+      if (stateName === "ready") {
+        externalFetchStateEl.className = "badge text-bg-success";
+        externalFetchStateEl.textContent = "Public ready";
+        return;
+      }
+
+      if (stateName === "degraded") {
+        externalFetchStateEl.className = "badge text-bg-warning";
+        externalFetchStateEl.textContent = "Public limited";
+        return;
+      }
+
+      externalFetchStateEl.className = "badge text-bg-light border";
+      externalFetchStateEl.textContent = "Idle";
     };
 
     const stationIcon = (station) => {
@@ -259,6 +290,9 @@
       const distanceHtml = typeof station.distance_km === "number"
         ? `<div class="small"><strong>Distance:</strong> ${station.distance_km.toFixed(2)} km</div>`
         : "";
+      const coordsHtml = (Number.isFinite(Number(station.latitude)) && Number.isFinite(Number(station.longitude)))
+        ? `<div class="small"><strong>Coordinates:</strong> ${Number(station.latitude).toFixed(5)}, ${Number(station.longitude).toFixed(5)}</div>`
+        : "";
       const slotsHtml = station.bookable === false
         ? '<div class="small text-muted">Discovery only. Booking is not available for public stations.</div>'
         : `<div class="small"><strong>Available Slots:</strong> ${station.available_slots} / ${station.total_slots}</div>`;
@@ -274,6 +308,7 @@
           <div class="small text-muted mb-1">${station.location || station.address || "Location unavailable"}</div>
           ${operatorHtml}
           ${chargingTypeHtml}
+          ${coordsHtml}
           ${slotsHtml}
           ${distanceHtml}
         </div>
@@ -320,6 +355,9 @@
           const slotsText = station.bookable === false
             ? "Public discovery"
             : `Slots: ${station.available_slots} / ${station.total_slots}`;
+          const coordsText = (Number.isFinite(Number(station.latitude)) && Number.isFinite(Number(station.longitude)))
+            ? `${Number(station.latitude).toFixed(4)}, ${Number(station.longitude).toFixed(4)}`
+            : "Coordinates unavailable";
           return `
             <button type="button" class="nearby-item text-start" data-nearby-station-id="${station.id}">
               <div class="d-flex justify-content-between align-items-start gap-2">
@@ -327,6 +365,7 @@
                   <div class="fw-semibold">${stationDisplayName(station)}</div>
                   <div class="small text-muted">${station.location || station.address || "Location unavailable"}</div>
                   <div class="small mt-1">${slotsText}</div>
+                  <div class="small text-muted">${coordsText}</div>
                 </div>
                 <div class="d-flex flex-column align-items-end gap-2">
                   ${sourceBadge(station)}
@@ -405,6 +444,8 @@
         return;
       }
 
+      setExternalFetchState("loading");
+
       const params = new URLSearchParams({
         lat: String(state.userLocation.latitude),
         lon: String(state.userLocation.longitude),
@@ -424,16 +465,21 @@
         }
         if (payload.public_error) {
           state.publicUnavailable = true;
+          setExternalFetchState("degraded");
           setGeoStatus(`${payload.public_error} Local stations are still available.`, "warning");
         } else if (state.publicUnavailable) {
           state.publicUnavailable = false;
+          setExternalFetchState("ready");
           setGeoStatus("Location active. Showing nearby local and public stations.", "success");
+        } else {
+          setExternalFetchState("ready");
         }
       } catch (error) {
         if (!state.publicUnavailable) {
           setGeoStatus("Public station discovery is temporarily unavailable. Showing local stations only.", "warning");
           state.publicUnavailable = true;
         }
+        setExternalFetchState("degraded");
       }
     };
 
@@ -580,5 +626,6 @@
     }
 
     applyFiltersAndRender();
+    setExternalFetchState("idle");
   </script>
 {% endblock %}

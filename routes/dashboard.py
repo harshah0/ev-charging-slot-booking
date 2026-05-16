@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import Blueprint, redirect, render_template, url_for
+from flask import Blueprint, jsonify, redirect, render_template, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func
@@ -11,6 +11,7 @@ from models import Transaction
 from models.transaction import TransactionType, TransactionStatus
 from models.booking import BookingLifecycleStatus
 from services.admin_analytics import build_admin_analytics_snapshot
+from services.open_charge_map import get_open_charge_map_diagnostics
 from utils.decorators import admin_required
 from utils.datetime_utils import utc_now
 
@@ -89,6 +90,7 @@ def user_dashboard():
 @admin_required
 def admin_dashboard():
     analytics = build_admin_analytics_snapshot()
+    ocm_diagnostics = get_open_charge_map_diagnostics()
 
     recent_bookings = (
         Booking.query.options(joinedload(Booking.station), joinedload(Booking.user))
@@ -107,4 +109,11 @@ def admin_dashboard():
         **analytics,
         recent_bookings=recent_bookings,
         station_shortcuts=station_shortcuts,
+        ocm_diagnostics=ocm_diagnostics,
     )
+
+
+@dashboard_bp.get("/admin/openchargemap-diagnostics")
+@admin_required
+def admin_openchargemap_diagnostics():
+    return jsonify(get_open_charge_map_diagnostics())

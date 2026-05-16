@@ -51,6 +51,83 @@
   </div>
 </div>
 
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-body p-4">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+      <div>
+        <h2 class="h5 fw-bold mb-1">Public Station API Diagnostics</h2>
+        <p class="text-muted mb-0">Live integration health for OpenChargeMap discovery.</p>
+      </div>
+      {% if ocm_diagnostics.enabled %}
+        <span id="ocm-enabled-badge" class="badge text-bg-success">Enabled</span>
+      {% else %}
+        <span id="ocm-enabled-badge" class="badge text-bg-secondary">Disabled</span>
+      {% endif %}
+    </div>
+
+    <div class="row g-3">
+      <div class="col-sm-6 col-lg-3">
+        <div class="border rounded-3 p-3 h-100 bg-light">
+          <div class="text-muted small">Hit Ratio</div>
+          <div id="ocm-hit-ratio" class="h5 fw-bold mb-0">{{ ocm_diagnostics.hit_ratio }}%</div>
+          <div class="small text-muted">Cache + stale cache over total requests</div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="border rounded-3 p-3 h-100 bg-light">
+          <div class="text-muted small">Cache Entries</div>
+          <div id="ocm-cache-entries" class="h5 fw-bold mb-0">{{ ocm_diagnostics.cache_entries }} / {{ ocm_diagnostics.cache_max_entries }}</div>
+          <div id="ocm-cache-ttl" class="small text-muted">TTL {{ ocm_diagnostics.cache_ttl_seconds }}s</div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="border rounded-3 p-3 h-100 bg-light">
+          <div class="text-muted small">Upstream Calls</div>
+          <div id="ocm-api-calls" class="h5 fw-bold mb-0">{{ ocm_diagnostics.api_calls_total }}</div>
+          <div id="ocm-requests" class="small text-muted">Requests {{ ocm_diagnostics.requests_total }}</div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="border rounded-3 p-3 h-100 bg-light">
+          <div class="text-muted small">Rate Limit</div>
+          {% if ocm_diagnostics.is_rate_limited %}
+            <div id="ocm-rate-state" class="h5 fw-bold text-warning mb-0">Cooling down</div>
+            <div id="ocm-rate-meta" class="small text-muted">{{ ocm_diagnostics.cooldown_remaining_seconds }}s remaining</div>
+          {% else %}
+            <div id="ocm-rate-state" class="h5 fw-bold text-success mb-0">Normal</div>
+            <div id="ocm-rate-meta" class="small text-muted">No cooldown active</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+      <div class="col-lg-6">
+        <div class="border rounded-3 p-3 h-100">
+          <div class="text-muted small mb-1">Last upstream error</div>
+          {% if ocm_diagnostics.last_upstream_error %}
+            <div id="ocm-last-error" class="small text-danger fw-semibold">{{ ocm_diagnostics.last_upstream_error }}</div>
+          {% else %}
+            <div id="ocm-last-error" class="small text-success fw-semibold">No active upstream error.</div>
+          {% endif %}
+          <div id="ocm-error-count" class="small text-muted mt-2">Total upstream errors: {{ ocm_diagnostics.upstream_errors }}</div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="border rounded-3 p-3 h-100">
+          <div class="text-muted small mb-1">Last successful sync</div>
+          {% if ocm_diagnostics.last_success_at %}
+            <div id="ocm-last-success" class="small fw-semibold">{{ ocm_diagnostics.last_success_at }}</div>
+          {% else %}
+            <div id="ocm-last-success" class="small text-muted">No successful upstream sync yet.</div>
+          {% endif %}
+          <div id="ocm-stale-cache" class="small text-muted mt-2">Stale cache hits: {{ ocm_diagnostics.stale_cache_hits }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="row g-4 mb-4">
   <div class="col-lg-5">
     <div class="card shadow-sm border-0 h-100">
@@ -187,6 +264,10 @@
         <div class="fw-bold" data-live-metric="total_wallet_revenue">₹{{ "%.2f"|format(total_wallet_revenue) }}</div>
       </div>
     </div>
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <div class="small text-muted">Last updated <span id="analytics-last-updated">waiting for live analytics</span></div>
+      <div class="small text-muted">Realtime updates are applied without recreating charts.</div>
+    </div>
 
     <div class="alert alert-info border-0 mb-3">
       <div class="d-flex justify-content-between align-items-center gap-3">
@@ -237,10 +318,9 @@
             <div class="fw-semibold">Top Stations</div>
             <div id="stations-loading" class="text-muted small">Loading…</div>
           </div>
-          {% if top_stations %}
-            <canvas id="chartStations" height="160"></canvas>
-          {% else %}
-            <div class="empty-state">No station usage data yet.</div>
+          <canvas id="chartStations" height="160"></canvas>
+          {% if not top_stations %}
+            <div id="top-stations-empty" class="empty-state mt-3">No station usage data yet.</div>
           {% endif %}
         </div>
       </div>
@@ -265,53 +345,243 @@
     const topStationCounts = {{ top_station_counts|tojson }};
 
     window.EVChargeCharts = window.EVChargeCharts || {};
+    const MAX_CHART_POINTS = 30;
 
-    function renderCharts(){
-      // Bookings line
-      const ctxB = document.getElementById('chartBookings').getContext('2d');
-      window.EVChargeCharts.bookingsPerDay = new Chart(ctxB, {
+    const chartConfigDefaults = {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      normalized: true,
+      plugins: {
+        legend: { display: false },
+      },
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+    };
+
+    const buildChartOptions = (overrides = {}) => ({
+      ...chartConfigDefaults,
+      ...overrides,
+      plugins: {
+        ...chartConfigDefaults.plugins,
+        ...(overrides.plugins || {}),
+      },
+      interaction: {
+        ...chartConfigDefaults.interaction,
+        ...(overrides.interaction || {}),
+      },
+    });
+
+    const clampChartSeries = (labels, values) => {
+      const safeLabels = Array.isArray(labels) ? labels.slice(-MAX_CHART_POINTS) : [];
+      const safeValues = Array.isArray(values) ? values.slice(-MAX_CHART_POINTS) : [];
+      return { labels: safeLabels, values: safeValues };
+    };
+
+    const destroyChartIfNeeded = (chartName) => {
+      const existing = window.EVChargeCharts[chartName];
+      if (existing && typeof existing.destroy === 'function') {
+        existing.destroy();
+      }
+      window.EVChargeCharts[chartName] = null;
+    };
+
+    const createOrReuseChart = (chartName, canvasId, configFactory) => {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) {
+        return null;
+      }
+
+      const existing = window.EVChargeCharts[chartName];
+      if (existing && existing.canvas === canvas) {
+        return existing;
+      }
+
+      destroyChartIfNeeded(chartName);
+      const context = canvas.getContext('2d');
+      const chart = new Chart(context, configFactory());
+      window.EVChargeCharts[chartName] = chart;
+      return chart;
+    };
+
+    const updateChartSeries = (chart, labels, values) => {
+      if (!chart) {
+        return;
+      }
+
+      const series = clampChartSeries(labels, values);
+      // Replace labels and datasets atomically to avoid accidental append
+      const existing = chart.data.datasets && chart.data.datasets[0] ? chart.data.datasets[0] : {};
+      chart.data.labels = series.labels;
+      chart.data.datasets = [{
+        ...existing,
+        data: series.values,
+      }];
+      chart.update('none');
+    };
+
+    async function refreshOpenChargeMapDiagnostics() {
+      try {
+        const response = await fetch("{{ url_for('dashboard.admin_openchargemap_diagnostics') }}", {
+          headers: { "Accept": "application/json" },
+          credentials: "same-origin",
+        });
+        if (!response.ok) {
+          throw new Error(`diagnostics refresh failed: ${response.status}`);
+        }
+
+        const diagnostics = await response.json();
+
+        const enabledBadge = document.getElementById("ocm-enabled-badge");
+        if (enabledBadge) {
+          enabledBadge.className = diagnostics.enabled ? "badge text-bg-success" : "badge text-bg-secondary";
+          enabledBadge.textContent = diagnostics.enabled ? "Enabled" : "Disabled";
+        }
+
+        const hitRatio = document.getElementById("ocm-hit-ratio");
+        if (hitRatio) {
+          hitRatio.textContent = `${diagnostics.hit_ratio}%`;
+        }
+
+        const cacheEntries = document.getElementById("ocm-cache-entries");
+        if (cacheEntries) {
+          cacheEntries.textContent = `${diagnostics.cache_entries} / ${diagnostics.cache_max_entries}`;
+        }
+
+        const cacheTtl = document.getElementById("ocm-cache-ttl");
+        if (cacheTtl) {
+          cacheTtl.textContent = `TTL ${diagnostics.cache_ttl_seconds}s`;
+        }
+
+        const apiCalls = document.getElementById("ocm-api-calls");
+        if (apiCalls) {
+          apiCalls.textContent = String(diagnostics.api_calls_total);
+        }
+
+        const requests = document.getElementById("ocm-requests");
+        if (requests) {
+          requests.textContent = `Requests ${diagnostics.requests_total}`;
+        }
+
+        const rateState = document.getElementById("ocm-rate-state");
+        const rateMeta = document.getElementById("ocm-rate-meta");
+        if (rateState && rateMeta) {
+          if (diagnostics.is_rate_limited) {
+            rateState.className = "h5 fw-bold text-warning mb-0";
+            rateState.textContent = "Cooling down";
+            rateMeta.textContent = `${diagnostics.cooldown_remaining_seconds}s remaining`;
+          } else {
+            rateState.className = "h5 fw-bold text-success mb-0";
+            rateState.textContent = "Normal";
+            rateMeta.textContent = "No cooldown active";
+          }
+        }
+
+        const lastError = document.getElementById("ocm-last-error");
+        if (lastError) {
+          if (diagnostics.last_upstream_error) {
+            lastError.className = "small text-danger fw-semibold";
+            lastError.textContent = diagnostics.last_upstream_error;
+          } else {
+            lastError.className = "small text-success fw-semibold";
+            lastError.textContent = "No active upstream error.";
+          }
+        }
+
+        const errorCount = document.getElementById("ocm-error-count");
+        if (errorCount) {
+          errorCount.textContent = `Total upstream errors: ${diagnostics.upstream_errors}`;
+        }
+
+        const lastSuccess = document.getElementById("ocm-last-success");
+        if (lastSuccess) {
+          if (diagnostics.last_success_at) {
+            lastSuccess.className = "small fw-semibold";
+            lastSuccess.textContent = diagnostics.last_success_at;
+          } else {
+            lastSuccess.className = "small text-muted";
+            lastSuccess.textContent = "No successful upstream sync yet.";
+          }
+        }
+
+        const staleCache = document.getElementById("ocm-stale-cache");
+        if (staleCache) {
+          staleCache.textContent = `Stale cache hits: ${diagnostics.stale_cache_hits}`;
+        }
+      } catch (_error) {
+        // Keep the latest visible diagnostics when a poll attempt fails.
+      }
+    }
+
+    function initializeCharts(){
+      createOrReuseChart('bookingsPerDay', 'chartBookings', () => ({
         type: 'line',
-        data: {labels: bookingsLabels, datasets: [{label: 'Bookings', data: bookingsData, borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.08)', fill:true, tension:0.3} ]},
-        options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}
-      });
+        data: {
+          labels: clampChartSeries(bookingsLabels, bookingsData).labels,
+          datasets: [{
+            label: 'Bookings',
+            data: clampChartSeries(bookingsLabels, bookingsData).values,
+            borderColor: '#0d6efd',
+            backgroundColor: 'rgba(13,110,253,0.08)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 0,
+            pointHitRadius: 12,
+          }],
+        },
+        options: buildChartOptions(),
+      }));
       document.getElementById('bookings-loading').style.display='none';
 
-      // Recharge line
-      const ctxR = document.getElementById('chartRecharge').getContext('2d');
-      window.EVChargeCharts.rechargeTrends = new Chart(ctxR, {
+      createOrReuseChart('rechargeTrends', 'chartRecharge', () => ({
         type:'line',
-        data:{labels:rechargeLabels, datasets:[{label:'Recharges', data:rechargeData, borderColor:'#198754', backgroundColor:'rgba(25,135,84,0.08)', fill:true, tension:0.3}]},
-        options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}
-      });
+        data:{
+          labels: clampChartSeries(rechargeLabels, rechargeData).labels,
+          datasets:[{
+            label:'Recharges',
+            data: clampChartSeries(rechargeLabels, rechargeData).values,
+            borderColor:'#198754',
+            backgroundColor:'rgba(25,135,84,0.08)',
+            fill:true,
+            tension:0.3,
+            pointRadius: 0,
+            pointHitRadius: 12,
+          }],
+        },
+        options: buildChartOptions(),
+      }));
       document.getElementById('recharge-loading').style.display='none';
 
-      // Status doughnut
-      const ctxS = document.getElementById('chartStatus').getContext('2d');
-      window.EVChargeCharts.statusDistribution = new Chart(ctxS, {
+      createOrReuseChart('statusDistribution', 'chartStatus', () => ({
         type:'doughnut',
-        data:{labels:statusLabels, datasets:[{data:statusData, backgroundColor:['#0d6efd','#198754','#ffc107','#6c757d']}]},
-        options:{responsive:true, maintainAspectRatio:false}
-      });
+        data:{labels: statusLabels.slice(-MAX_CHART_POINTS), datasets:[{data: statusData.slice(-MAX_CHART_POINTS), backgroundColor:['#0d6efd','#198754','#ffc107','#6c757d']}]},
+        options: buildChartOptions({ plugins: { legend: { display: false } } }),
+      }));
       document.getElementById('status-loading').style.display='none';
 
-      // Top stations bar
-      if(topStations.length){
-        const ctxT = document.getElementById('chartStations').getContext('2d');
-        window.EVChargeCharts.topStations = new Chart(ctxT, {
-          type:'bar',
-          data:{labels:topStations, datasets:[{label:'Bookings', data:topStationCounts, backgroundColor:'#6f42c1'}]},
-          options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{maxRotation:45,minRotation:0}}}}
-        });
-        document.getElementById('stations-loading').style.display='none';
+      createOrReuseChart('topStations', 'chartStations', () => ({
+        type:'bar',
+        data:{labels: topStations.slice(-MAX_CHART_POINTS), datasets:[{label:'Bookings', data: topStationCounts.slice(-MAX_CHART_POINTS), backgroundColor:'#6f42c1'}]},
+          options: buildChartOptions({
+            scales:{x:{ticks:{maxRotation:45,minRotation:0}}},
+          })
+      }));
+      const topStationsEmpty = document.getElementById('top-stations-empty');
+      if (topStationsEmpty) {
+        topStationsEmpty.style.display = topStations.length ? 'none' : 'block';
       }
+      document.getElementById('stations-loading').style.display='none';
 
       if (window.EVChargeRealtime && typeof window.EVChargeRealtime.flushPendingState === 'function') {
         window.EVChargeRealtime.flushPendingState();
       }
     }
 
-    // Defer rendering for small loading effect
-    setTimeout(renderCharts, 300);
+    initializeCharts();
+    refreshOpenChargeMapDiagnostics();
+    setInterval(refreshOpenChargeMapDiagnostics, 15000);
   </script>
 {% endblock %}
 {% endblock %}

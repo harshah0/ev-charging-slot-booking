@@ -2,11 +2,13 @@ import os
 import tempfile
 from pathlib import Path
 from datetime import timedelta
+from typing import Final
 
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
+_SENSITIVE_VALUE_MARKERS: Final = {"", "changeme", "change-me", "change-me-in-production", "your-key-here", "replace-me"}
 
 
 def _is_ci_or_test_mode() -> bool:
@@ -21,6 +23,25 @@ def _normalize_database_url(database_url: str) -> str:
     if database_url.startswith("postgres://"):
         return database_url.replace("postgres://", "postgresql://", 1)
     return database_url
+
+
+def _read_openchargemap_api_key() -> str | None:
+    """Read and validate the OpenChargeMap key from environment variables.
+
+    The key is treated as optional. Invalid placeholder values are ignored so
+    production can start safely even when the secret is not configured yet.
+    """
+    api_key = os.getenv("OPENCHARGEMAP_API_KEY", "").strip()
+    if not api_key or api_key.lower() in _SENSITIVE_VALUE_MARKERS:
+        return None
+
+    if len(api_key) < 12:
+        return None
+
+    if not all(char.isalnum() or char in {"-", "_"} for char in api_key):
+        return None
+
+    return api_key
 
 
 def _ensure_sqlite_parent_dir(database_uri: str) -> str:
@@ -88,11 +109,18 @@ class Config:
     SOCKETIO_PING_TIMEOUT = int(os.getenv("SOCKETIO_PING_TIMEOUT", "60"))
     SOCKETIO_MAX_HTTP_BUFFER_SIZE = int(os.getenv("SOCKETIO_MAX_HTTP_BUFFER_SIZE", "1000000"))
     OPENCHARGEMAP_ENABLED = os.getenv("OPENCHARGEMAP_ENABLED", "true").lower() == "true"
-    OPENCHARGEMAP_API_KEY = os.getenv("OPENCHARGEMAP_API_KEY")
+    OPENCHARGEMAP_API_KEY = _read_openchargemap_api_key()
     OPENCHARGEMAP_ENDPOINT = os.getenv("OPENCHARGEMAP_ENDPOINT", "https://api.openchargemap.io/v3/poi/")
     OPENCHARGEMAP_TIMEOUT_SECONDS = int(os.getenv("OPENCHARGEMAP_TIMEOUT_SECONDS", "6"))
     OPENCHARGEMAP_CACHE_TTL_SECONDS = int(os.getenv("OPENCHARGEMAP_CACHE_TTL_SECONDS", "300"))
     OPENCHARGEMAP_MAX_RESULTS = int(os.getenv("OPENCHARGEMAP_MAX_RESULTS", "25"))
+    OPENCHARGEMAP_RETRY_ATTEMPTS = int(os.getenv("OPENCHARGEMAP_RETRY_ATTEMPTS", "2"))
+    OPENCHARGEMAP_RETRY_BACKOFF_SECONDS = float(os.getenv("OPENCHARGEMAP_RETRY_BACKOFF_SECONDS", "0.35"))
+    OPENCHARGEMAP_RATE_LIMIT_COOLDOWN_SECONDS = int(os.getenv("OPENCHARGEMAP_RATE_LIMIT_COOLDOWN_SECONDS", "60"))
+    OPENCHARGEMAP_CACHE_MAX_ENTRIES = int(os.getenv("OPENCHARGEMAP_CACHE_MAX_ENTRIES", "500"))
+    # Optional Redis URL to share OpenChargeMap cache/cooldown across instances
+    OPENCHARGEMAP_REDIS_URL = os.getenv("OPENCHARGEMAP_REDIS_URL")
+    OPENCHARGEMAP_REDIS_PREFIX = os.getenv("OPENCHARGEMAP_REDIS_PREFIX", "ocm:")
     PERMANENT_SESSION_LIFETIME = timedelta(days=int(os.getenv("SESSION_LIFETIME_DAYS", "7")))
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
