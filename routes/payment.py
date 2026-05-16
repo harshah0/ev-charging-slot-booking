@@ -9,7 +9,7 @@ from flask_login import current_user, login_required
 from extensions import db
 from models import Transaction
 from models.transaction import TransactionStatus, TransactionType
-from services.realtime import emit_wallet_update
+from services.realtime import emit_recharge_analytics_update, emit_wallet_update
 from utils.csrf import validate_csrf_token
 from utils.payment import format_currency
 
@@ -90,6 +90,10 @@ def recharge_post():
             transaction=transaction,
             message=f"Wallet recharged with {format_currency(amount)}.",
         )
+
+        # Broadcast a compact analytics event for admin dashboards only.
+        # This keeps analytics realtime without relying on connect/sync flows.
+        emit_recharge_analytics_update(user=current_user, amount=amount)
 
         flash(
             f"Wallet recharged successfully with {format_currency(amount)}. New balance: {format_currency(Decimal(current_user.wallet_balance))}",

@@ -228,6 +228,15 @@ def run() -> None:
     assert_event(user_names, "wallet:update", "recharge")
     assert_event(user_names, "notification:new", "recharge")
     assert_event(admin_names, "analytics:update", "recharge")
+    recharge_admin_event = next(
+        (event for event in admin_events if event.get("name") == "analytics:update"),
+        None,
+    )
+    if not recharge_admin_event:
+        raise RuntimeError("Missing recharge analytics event payload")
+    recharge_payload = recharge_admin_event.get("args", [{}])[0]
+    if recharge_payload.get("type") != "recharge":
+        raise RuntimeError(f"Unexpected recharge analytics payload: {recharge_payload}")
 
     # Step 2: create booking
     with app.app_context():
@@ -314,7 +323,6 @@ def run() -> None:
     admin_sync_events = collect(admin_socket, "admin", "admin-sync-request")
     admin_sync_names = names(admin_sync_events)
     assert_event(admin_sync_names, "station:bulk_update", "admin-sync-request")
-    assert_event(admin_sync_names, "analytics:update", "admin-sync-request")
     assert_station_bulk_payload(admin_sync_events, "admin-sync-request")
 
     user_socket.disconnect()
