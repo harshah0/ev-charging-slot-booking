@@ -390,6 +390,14 @@ Supporting docs in this repository:
 - [Wallet and payment notes](WALLET_AND_PAYMENT.md)
 - [RBAC architecture notes](RBAC_ARCHITECTURE.md)
 
+## Developer
+
+- **P.V.V. Harsha Vardhan**
+
+_Full-Stack Developer | Realtime Systems | Geospatial Web Applications_
+
+If you'd like to discuss this project, technical choices, or potential collaboration, feel free to open an issue or reach out via my repository profile.
+
 ## License
 
 This project is released under the terms of the [LICENSE](LICENSE) file.
