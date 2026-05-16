@@ -162,7 +162,7 @@
               <div>
                 <div class="fw-semibold">{{ station.station_name }}</div>
                 <div class="text-muted small">{{ station.city }}, {{ station.state }}</div>
-                <div class="small mt-1">{{ station.available_slots }} / {{ station.total_slots }} slots</div>
+                  <div class="small mt-1" data-live-station-slots="{{ station.id }}" data-available-slots="{{ station.available_slots }}" data-total-slots="{{ station.total_slots }}">{{ station.available_slots }} / {{ station.total_slots }} slots</div>
               </div>
               <a href="{{ url_for('stations.edit_station', station_id=station.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
             </div>
@@ -303,6 +303,10 @@
           options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{maxRotation:45,minRotation:0}}}}
         });
         document.getElementById('stations-loading').style.display='none';
+      }
+
+      if (window.EVChargeRealtime && typeof window.EVChargeRealtime.flushPendingState === 'function') {
+        window.EVChargeRealtime.flushPendingState();
       }
     }
 

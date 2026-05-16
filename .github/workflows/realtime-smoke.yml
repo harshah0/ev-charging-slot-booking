@@ -28,5 +28,6 @@ jobs:
         env:
           FLASK_ENV: development
           SOCKETIO_ASYNC_MODE: eventlet
+          CI_SMOKE_TEST: "true"
         run: |
           python scripts/realtime_e2e_verify.py

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
+import tempfile
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -9,6 +11,36 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+
+def _configure_ci_test_database() -> None:
+    """Set a writable sqlite path for CI smoke tests before app import.
+
+    The app module creates a global Flask app at import time. In GitHub Actions,
+    relative sqlite paths can fail when intermediate directories do not exist,
+    causing db.create_all() to raise "unable to open database file".
+    """
+    if os.getenv("DATABASE_URL"):
+        return
+
+    temp_db = Path(tempfile.gettempdir()) / "ev-charging-slot-booking" / "realtime-smoke.db"
+    temp_db.parent.mkdir(parents=True, exist_ok=True)
+    os.environ["CI_SMOKE_TEST"] = "true"
+    os.environ["DATABASE_URL"] = f"sqlite:///{temp_db.as_posix()}"
+
+
+def _ensure_sqlite_directory(database_uri: str) -> None:
+    if not database_uri.startswith("sqlite:///"):
+        return
+
+    target = database_uri.replace("sqlite:///", "", 1)
+    if target in {":memory:", ""} or target.startswith("file:"):
+        return
+
+    Path(target).parent.mkdir(parents=True, exist_ok=True)
+
+
+_configure_ci_test_database()
 
 from app import app as flask_app
 from extensions import db, socketio
@@ -132,6 +164,7 @@ def collect(socket_client, tab_name: str, step: str) -> list[dict]:
 def run() -> None:
     app = flask_app
     app.config["TESTING"] = True
+    _ensure_sqlite_directory(str(app.config.get("SQLALCHEMY_DATABASE_URI", "")))
 
     with app.app_context():
         db.create_all()
