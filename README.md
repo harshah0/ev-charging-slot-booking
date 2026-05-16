@@ -8,6 +8,21 @@ Built with Flask, PostgreSQL, Flask-SocketIO, Leaflet.js, Chart.js, and OpenChar
 
 The platform combines local station booking workflows with public EV station discovery and a realtime analytics dashboard. Users can locate nearby charging stations through browser geolocation, filter by radius, reserve time slots, recharge wallet balances, and track booking lifecycle changes instantly. Admins get operational visibility through Socket.IO-powered updates, Chart.js analytics, and diagnostics for public station discovery.
 
+## Live Demo
+
+[![Live Demo - Visit App](https://img.shields.io/badge/Live%20Demo-Visit%20App-brightgreen?style=for-the-badge&logo=render)](https://ev-charging-slot-booking-1.onrender.com)
+
+- Live application: https://ev-charging-slot-booking-1.onrender.com
+
+_Note:_ The demo is hosted on Render's free tier — the first access after a period of inactivity may take 20–90 seconds while the instance wakes up.
+
+### Demo Credentials
+
+- **Admin email:** admin123@gmail.com
+- **Password:** Admin@123
+
+Use the above credentials to sign in as an admin on the demo deployment. These credentials are for demonstration purposes only — do not reuse in production.
+
 The system distinguishes between:
 
 - Local stations: owned or managed stations that support booking, availability, and wallet-driven business workflows.
